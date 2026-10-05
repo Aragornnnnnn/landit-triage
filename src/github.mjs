@@ -49,3 +49,18 @@ export const createGithubClient = (token, repository, workflowFile) => {
 
   return { listRunsSince, listRecentRuns, listJobs };
 };
+
+/** 다른 레포(landit-be·landit-ai)의 최근 릴리즈 — 배포 태그를 고르는 데 쓴다 */
+export const listReleases = async (token, repository) => {
+  const data = await requestJson(
+    `GitHub 릴리즈(${repository})`,
+    `${API}/repos/${repository}/releases?per_page=30`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    },
+  );
+  return data;
+};

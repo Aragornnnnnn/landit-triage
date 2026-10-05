@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   nearbyWindow,
+  pickDeployedRelease,
   pickNearbyIssues,
   resolveFrontendRef,
   sanitizeEvent,
@@ -93,5 +94,50 @@ describe('pickNearbyIssues', () => {
         traces: ['b', 'c'],
       },
     ]);
+  });
+});
+
+describe('pickDeployedRelease', () => {
+  const release = (tag, publishedAt, extra = {}) => ({
+    tag_name: tag,
+    published_at: publishedAt,
+    draft: false,
+    prerelease: false,
+    ...extra,
+  });
+
+  it('이벤트 시각에 돌고 있던 가장 최근 배포 태그를 고른다', () => {
+    // Given 10/5 배포 전에 난 이벤트
+    const releases = [
+      release('be-v1.6.0', '2026-10-05T04:54:57Z'),
+      release('be-v1.5.2', '2026-09-25T07:53:35Z'),
+    ];
+
+    // When 10/1 이벤트 기준으로 고르면
+    const tag = pickDeployedRelease(releases, 'be-v', '2026-10-01T00:00:00Z');
+
+    // Then 그때 배포돼 있던 1.5.2다
+    assert.equal(tag, 'be-v1.5.2');
+  });
+
+  it('초안·사전 릴리즈와 접두어가 다른 태그는 건너뛴다', () => {
+    const releases = [
+      release('be-v1.7.0', '2026-10-02T00:00:00Z', { draft: true }),
+      release('be-v1.6.9', '2026-10-02T00:00:00Z', { prerelease: true }),
+      release('ai-v1.6.0', '2026-10-02T00:00:00Z'),
+      release('be-v1.5.2', '2026-09-25T00:00:00Z'),
+    ];
+
+    assert.equal(
+      pickDeployedRelease(releases, 'be-v', '2026-10-05T00:00:00Z'),
+      'be-v1.5.2',
+    );
+  });
+
+  it('고를 배포가 없으면 main을 쓴다', () => {
+    assert.equal(
+      pickDeployedRelease([], 'be-v', '2026-10-05T00:00:00Z'),
+      'main',
+    );
   });
 });

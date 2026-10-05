@@ -36,7 +36,7 @@ Sentry에 새 이슈가 생기면 Claude Code가 FE·BE·AI 코드를 함께 읽
 | ②   | landit-alerts ↔ Discord | 이슈 카드 embed를 보내고, 올라간 메시지 id·채널 id를 돌려받음 (`?wait=true`)              | 채널 웹훅 URL                                               |
 | ③   | landit-alerts → GitHub  | `repository_dispatch` — `issue_id`, `event_id`, `channel_id`, `message_id`                | `TRIAGE_DISPATCH_TOKEN` (landit-triage 하나, Contents 쓰기) |
 | ④   | landit-triage → Sentry  | 이슈 상세, 알림 이벤트, 최근 이벤트 5건, 태그 분포, 앞뒤 2분 다른 이슈 → `context/*.json` | `SENTRY_AUTH_TOKEN` (읽기)                                  |
-| ⑤   | GitHub → landit-triage  | landit-fe(웹은 릴리즈 커밋), landit-be, landit-ai 코드 → `repos/`                         | 없음 (퍼블릭)                                               |
+| ⑤   | GitHub → landit-triage  | landit-fe(웹은 릴리즈 커밋), landit-be·landit-ai(그때의 배포 태그) 코드 → `repos/`        | 없음 (퍼블릭)                                               |
 | ⑥   | Claude Code ↔ Anthropic | 분석 지침 + `context/` + 읽은 코드 조각, 응답으로 스레드 글                               | `CLAUDE_CODE_OAUTH_TOKEN` (구독)                            |
 | ⑦   | landit-triage → Discord | 카드 메시지에 스레드 생성, 분석 글 게시                                                   | `DISCORD_BOT_TOKEN`                                         |
 
@@ -72,7 +72,7 @@ sequenceDiagram
 
 1. **카드는 지금처럼 바로 와요.** 분석은 그 뒤 2~4분 안에 스레드로 붙어요. 분석이 실패해도 카드 알림은 영향이 없어요.
 2. **Claude는 Sentry에 직접 접근하지 않아요.** `scripts/context.mjs`가 필요한 자료를 미리 파일로 모으고, Claude는 그 파일과 세 레포 코드만 읽어요.
-3. **코드는 이슈가 난 그 버전을 봐요.** 웹 이슈는 Sentry 릴리즈(=landit-fe 커밋)로 체크아웃하고, 모바일·BE·AI는 배포 기준인 `main`을 봐요.
+3. **코드는 이슈가 났을 때 돌던 버전을 봐요.** 웹은 Sentry 릴리즈(=landit-fe 커밋), BE·AI는 이벤트 시각에 배포돼 있던 태그(`be-v*`, `ai-v*`)로 체크아웃해요. 모바일 셸만 앱 버전과 커밋을 잇는 정보가 없어서 `main`을 봐요.
 4. **같은 사건을 묶어요.** 한 사건이 메시지가 다른 여러 이슈로 갈라져 올라오는 일이 많아서, 앞뒤 2분 안의 다른 이슈를 같은 사건 후보로 함께 넘겨요.
 
 분석 지침 전문은 [`prompts/triage.md`](prompts/triage.md)에 있어요. 글의 형식과 말투를 바꾸려면 이 파일만 고치면 돼요.
@@ -125,7 +125,7 @@ Claude Code는 관리자 개인 구독으로 돌아요. 구독 사용량 %는 �
 
 상한을 넘으면 Claude를 부르지 않고 스레드에 "오늘 분석 한도를 넘어서 건너뛰었어요"만 남겨요. 분석마다 걸린 시간과 토큰 수가 스레드 끝(`-# 분석 2분 31초 · 토큰 15.2만`)과 실행 요약에 남아요. 처음 며칠은 분석 전후로 claude.ai 사용량 화면을 비교해 "토큰 n만 ≈ 몇 %"를 재 두면, 그다음부터는 토큰 수만 보고 어림할 수 있어요.
 
-참고로 테스트에서는 이슈 하나에 토큰 12만에서 18만 개, 시간은 2~4분이 들었어요(Opus 5.5 기준). 최근 30일 새 이슈는 하루 1건이 안 돼서, 평소에는 상한에 닿지 않아요.
+첫 실제 실행(WEB-PROD-1E, Opus 5.5)은 1분 8초, 도구 22번, 토큰 79만 개(대부분 캐시 읽기), API 정가 환산 $0.85였어요. 구독이라 실제 청구는 없고, 이 금액은 실행끼리 무게를 비교하는 기준으로만 봐요. 최근 30일 새 이슈는 하루 1건이 안 돼서, 평소에는 상한에 닿지 않아요.
 
 ## 보안
 

@@ -67,9 +67,10 @@ jobs:
         if: steps.guard.outputs.proceed == 'true'
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: node scripts/context.mjs
 
-      # 웹 이슈는 Sentry 릴리즈(=landit-fe 커밋)와 같은 코드를 본다. BE·AI는 배포 기준인 main
+      # 이슈가 났을 때 돌던 코드를 본다 — 웹은 Sentry 릴리즈(=커밋), BE·AI는 그 시각의 배포 태그, 모바일 셸은 main
       - name: landit-fe 체크아웃
         if: steps.guard.outputs.proceed == 'true'
         uses: actions/checkout@v4
@@ -85,7 +86,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Aragornnnnnn/landit-be
-          ref: main
+          ref: ${{ steps.context.outputs.backend_ref }}
           path: repos/landit-be
           fetch-depth: 1
           persist-credentials: false
@@ -95,7 +96,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Aragornnnnnn/landit-ai
-          ref: main
+          ref: ${{ steps.context.outputs.ai_ref }}
           path: repos/landit-ai
           fetch-depth: 1
           persist-credentials: false
@@ -156,5 +157,5 @@ jobs:
           name: triage-${{ env.ISSUE_ID }}
           path: |
             out/
-            context/meta.json
+            context/
           retention-days: 14

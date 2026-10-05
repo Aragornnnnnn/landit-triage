@@ -2,11 +2,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import {
   nearbyWindow,
+  pickDeployedRelease,
   pickNearbyIssues,
   resolveFrontendRef,
   sanitizeEvent,
 } from '../src/context.mjs';
 import { optionalEnv, requireEnv, setOutput } from '../src/env.mjs';
+import { listReleases } from '../src/github.mjs';
 import { createSentryClient } from '../src/sentry.mjs';
 
 const OUT_DIR = 'context';
@@ -47,6 +49,20 @@ const [recentEvents, tags, nearbyRows] = await Promise.all([
 
 const frontendRef = resolveFrontendRef(event.release?.version ?? event.release);
 
+// 릴리즈를 못 읽으면 main으로 — 코드 버전이 조금 어긋날 뿐 분석은 된다
+const deployedRef = async (repository, prefix) => {
+  const releases = await optional(`${repository} 릴리즈`, () =>
+    listReleases(requireEnv('GH_TOKEN'), repository),
+  );
+  return Array.isArray(releases)
+    ? pickDeployedRelease(releases, prefix, event.dateCreated)
+    : 'main';
+};
+const [backendRef, aiRef] = await Promise.all([
+  deployedRef('Aragornnnnnn/landit-be', 'be-v'),
+  deployedRef('Aragornnnnnn/landit-ai', 'ai-v'),
+]);
+
 write('issue.json', issue);
 write('event.json', event);
 write(
@@ -66,11 +82,15 @@ write('meta.json', {
   project: issue.project?.slug,
   commits: {
     'landit-fe': frontendRef,
-    'landit-be': 'main',
-    'landit-ai': 'main',
+    'landit-be': backendRef,
+    'landit-ai': aiRef,
   },
 });
 
-console.log(`이슈 ${issue.shortId} 수집 완료 · landit-fe 기준 ${frontendRef}`);
+console.log(
+  `이슈 ${issue.shortId} 수집 완료 · fe ${frontendRef} · be ${backendRef} · ai ${aiRef}`,
+);
 setOutput('short_id', issue.shortId);
 setOutput('frontend_ref', frontendRef);
+setOutput('backend_ref', backendRef);
+setOutput('ai_ref', aiRef);

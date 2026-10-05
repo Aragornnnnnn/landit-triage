@@ -6,6 +6,21 @@ const SHA_PATTERN = /^[0-9a-f]{40}$/;
 export const resolveFrontendRef = (release) =>
   typeof release === 'string' && SHA_PATTERN.test(release) ? release : 'main';
 
+// BE·AI는 main에서 손으로 배포하며 be-v1.6.0 같은 태그를 남긴다 — 이벤트 시각에 돌고 있던 배포를 고른다
+export const pickDeployedRelease = (releases, prefix, at) => {
+  const eventTime = new Date(at).getTime();
+  const deployed = releases
+    .filter(
+      (release) =>
+        !release.draft &&
+        !release.prerelease &&
+        release.tag_name.startsWith(prefix) &&
+        new Date(release.published_at).getTime() <= eventTime,
+    )
+    .sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+  return deployed[0]?.tag_name ?? 'main';
+};
+
 const DROPPED_FIELDS = [
   '_meta',
   'sdk',

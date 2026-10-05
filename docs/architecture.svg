@@ -110,8 +110,8 @@
     <line x1="592" y1="410" x2="592" y2="440" stroke="#9FE1CB" stroke-dasharray="3 3"/>
     <rect x="496" y="440" width="192" height="92" rx="10" fill="#FFFFFF" stroke="#E1F5EE"/>
     <text x="592" y="466" font-size="12" font-weight="600" fill="#2C2C2A" text-anchor="middle">이슈가 난 그 코드</text>
-    <text x="592" y="487" font-size="12" fill="#5F5E5A" text-anchor="middle">웹은 릴리즈 커밋</text>
-    <text x="592" y="507" font-size="12" fill="#5F5E5A" text-anchor="middle">모바일 · BE · AI는 main</text>
+    <text x="592" y="487" font-size="12" fill="#5F5E5A" text-anchor="middle">웹은 릴리즈 커밋 · 셸은 main</text>
+    <text x="592" y="507" font-size="12" fill="#5F5E5A" text-anchor="middle">BE · AI는 배포 태그</text>
   </g>
   <g>
     <line x1="808" y1="410" x2="808" y2="440" stroke="#F0997B" stroke-dasharray="3 3"/>
