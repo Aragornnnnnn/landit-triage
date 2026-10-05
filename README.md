@@ -3,9 +3,26 @@
 Sentry에 새 이슈가 생기면 Claude Code가 원인을 분석해서
 디스코드 알림 카드 아래에 스레드로 남겨요.
 
-![시스템 아키텍처](docs/system-architecture.svg)
+![한눈에 보기](docs/overview.svg)
 
-## 흐름
+<br />
+
+## 누가 무엇을 하나
+
+| 레포              | 역할      | 하는 일                                             |
+| ----------------- | --------- | --------------------------------------------------- |
+| **landit-alerts** | 알림 담당 | Sentry 알림 받기 → 카드 보내기 → triage에 분석 요청 |
+| **landit-triage** | 분석 담당 | 자료 조사 → Claude 분석 → 카드에 스레드 댓글        |
+
+- 카드는 지금처럼 바로 와요. 분석 댓글은 1~2분 뒤에 붙어요.
+- 분석이 실패해도 카드는 그대로 와요.
+- 코드는 이슈가 났을 때 돌던 버전을 봐요.
+  웹은 릴리즈 커밋, BE·AI는 그때의 배포 태그, 모바일 셸은 `main`이에요.
+
+<details>
+<summary>자세히 보기 — 시스템 아키텍처와 데이터 흐름</summary>
+
+![시스템 아키텍처](docs/system-architecture.svg)
 
 | #   | 어디서 어디로           | 무엇을                                   |
 | --- | ----------------------- | ---------------------------------------- |
@@ -17,17 +34,11 @@ Sentry에 새 이슈가 생기면 Claude Code가 원인을 분석해서
 | ⑥   | Claude Code ↔ Anthropic | 분석                                     |
 | ⑦   | landit-triage → Discord | 카드에 스레드로 게시                     |
 
-- 카드는 바로, 분석은 1~4분 뒤에 와요.
-- 분석이 실패해도 카드는 그대로 와요.
-- 코드는 이슈가 났을 때 돌던 버전을 봐요.
-  웹은 릴리즈 커밋, BE·AI는 그때의 배포 태그, 모바일 셸은 `main`이에요.
-
-<details>
-<summary>단계별 흐름 그림</summary>
-
 ![단계별 흐름](docs/architecture.svg)
 
 </details>
+
+<br />
 
 ## 판정
 
@@ -43,6 +54,8 @@ Sentry에 새 이슈가 생기면 Claude Code가 원인을 분석해서
 
 글 형식과 말투는 [`prompts/triage.md`](prompts/triage.md) 하나만 고치면 돼요.
 
+<br />
+
 ## 왜 별도 프라이빗 레포인가
 
 - **실행 시간**
@@ -55,6 +68,8 @@ Sentry에 새 이슈가 생기면 Claude Code가 원인을 분석해서
 
 GitHub Actions는 맥이 꺼져도 돌고, 무료 한도(월 2,000분) 안이고,
 Claude Code 구독 토큰을 공식 지원해서 골랐어요.
+
+<br />
 
 ## 사용량
 
@@ -71,7 +86,9 @@ Claude Code 구독 토큰을 공식 지원해서 골랐어요.
   장애로 이슈가 몰려도 하루 10건을 넘지 않아요.
 - 상한을 넘으면 "건너뛰었어요"만 남겨요.
 - 스레드 끝에 걸린 시간·토큰·API 환산 금액이 찍혀요.
-- 첫 실행은 1분 8초, API 환산 $0.85였어요.
+- 최근 실행은 분석 36초, API 환산 $0.32였어요. 구독 사용량 표시는 1%도 안 움직였어요.
+
+<br />
 
 ## 보안
 
@@ -94,6 +111,8 @@ Claude가 속을 수 있다고 보고 겹겹이 막아요.
 격리가 실제로 먹히는지는 Actions의 **self-check**로 확인해요.
 Claude Code 버전이나 `config/claude-settings.json`을 바꾸면 한 번 돌려 주세요.
 
+<br />
+
 ## 설정
 
 처음 설정은 [docs/setup.md](docs/setup.md)에 순서대로 있어요.
@@ -107,6 +126,8 @@ Claude Code 버전이나 `config/claude-settings.json`을 바꾸면 한 번 돌�
 선택 변수: `CLAUDE_MODEL`(기본 Opus 5.5), `DAILY_LIMIT`, `MAX_TURNS`,
 `CLAUDE_CODE_VERSION`, `TRIAGE_EMOJI`, `TRIAGE_CHANNELS`
 
+<br />
+
 ## 손으로 실행하기
 
 ```bash
@@ -116,27 +137,33 @@ gh workflow run triage.yml -R Aragornnnnnn/landit-triage -f issue_id=<Sentry 이
 채널·메시지 id를 비우면 디스코드에 안 올리고 실행 요약에만 남겨요.
 지침을 고친 뒤 시험할 때 쓰면 돼요.
 
+<br />
+
 ## 구조
 
 ```
 prompts/triage.md   분석 지침
 scripts/            워크플로우가 부르는 진입점 (guard · context · post)
 src/                판단 로직과 API 클라이언트, 테스트
-docs/               설정 절차 · 설계 결정 · 그림
+docs/               설정 절차 · 설계 결정 · 그림 (overview · system-architecture · architecture)
 ```
 
 ```bash
 npm test
 ```
 
+<br />
+
 ## 문제 해결
 
-| 증상               | 볼 곳                                                    |
-| ------------------ | -------------------------------------------------------- |
-| 스레드가 안 붙음   | Actions 실행이 있는지 → 없으면 landit-alerts Vercel 로그 |
-| "끝내지 못했어요"  | `Claude 분석` 단계 출력. `Not logged in`이면 토큰 재발급 |
-| `error_max_turns`  | `MAX_TURNS`를 올리거나 다시 실행                         |
-| 스레드 생성 403    | 봇의 채널 스레드 권한                                    |
-| 분석 원문이 필요함 | 실행의 Artifacts (14일 보관)                             |
+| 증상                               | 볼 곳                                                          |
+| ---------------------------------- | -------------------------------------------------------------- |
+| 스레드가 안 붙음                   | Actions 실행이 있는지 → 없으면 landit-alerts Vercel 로그       |
+| "끝내지 못했어요"                  | `Claude 분석` 단계 출력. `Not logged in`이면 토큰 재발급       |
+| `error_max_turns`                  | `MAX_TURNS`를 올리거나 다시 실행                               |
+| 스레드 생성 403                    | 봇의 채널 스레드 권한                                          |
+| 분석 원문이 필요함                 | 실행의 Artifacts (14일 보관)                                   |
+| 실행은 성공인데 글이 없음          | 같은 이슈를 이미 분석함(중복). 실행 로그 첫 줄에 이유가 있어요 |
+| "토큰 조각이 있어 게시하지 않아요" | 구독 토큰을 재발급해 시크릿을 바꿔 주세요                      |
 
 설계 결정과 이유는 [docs/decisions.md](docs/decisions.md)에 있어요.
