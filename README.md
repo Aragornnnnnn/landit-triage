@@ -27,6 +27,11 @@ Sentry에 새 이슈가 생기면 Claude Code가 FE·BE·AI 코드를 함께 읽
 
 ## 동작 방식
 
+![landit-triage 흐름 — Sentry 웹훅이 landit-alerts를 거쳐 디스코드 카드로 바로 가고, landit-triage가 실행 판단, Sentry 자료 수집, 코드 체크아웃, Claude Code 분석을 거쳐 2~4분 뒤 카드에 스레드를 붙인다](docs/architecture.svg)
+
+<details>
+<summary>시간 순서로 보기</summary>
+
 ```mermaid
 sequenceDiagram
     participant S as Sentry
@@ -45,6 +50,8 @@ sequenceDiagram
     C-->>T: 스레드 글
     T->>D: 카드에 스레드 열고 게시
 ```
+
+</details>
 
 1. **카드는 지금처럼 바로 와요.** 분석은 그 뒤 2~4분 안에 스레드로 붙어요. 분석이 실패해도 카드 알림은 영향이 없어요.
 2. **Claude는 Sentry에 직접 접근하지 않아요.** `scripts/context.mjs`가 필요한 자료를 미리 파일로 모으고, Claude는 그 파일과 세 레포 코드만 읽어요.
@@ -132,6 +139,7 @@ src/                판단 로직과 API 클라이언트 (테스트는 *.test.mj
 docs/
   setup.md          처음 설정 절차
   decisions.md      설계 결정과 이유
+  architecture.svg  README 흐름 그림
 ```
 
 외부 패키지 없이 Node.js 22 표준 기능만 써요.
