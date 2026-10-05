@@ -2,7 +2,7 @@
 # 트리거: landit-alerts(src/sentry/triage.mjs)가 카드를 올린 뒤 workflow_dispatch로 부른다. 입력 4개가 그쪽과의 계약이다
 # Actions 화면이나 gh workflow run으로 손으로 돌릴 수도 있다
 name: triage
-run-name: triage ${{ inputs.issue_id }}
+run-name: triage ${{ inputs.issue_id }} · ${{ inputs.message_id || '시험' }}
 
 on:
   workflow_dispatch:
@@ -41,11 +41,11 @@ jobs:
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
 
@@ -55,6 +55,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW_FILE: triage.yml
           DAILY_LIMIT: ${{ vars.DAILY_LIMIT }}
+          TRIAGE_CHANNELS: ${{ vars.TRIAGE_CHANNELS }}
         run: node scripts/guard.mjs
 
       - name: 건너뜀 안내
@@ -77,7 +78,7 @@ jobs:
       # 분석에 쓸모없는 파일은 받지 않는다(sparse checkout) — 체크아웃이 빨라지고, Claude가 Grep으로 큰 파일을 훑으며 토큰을 쓰지 않는다
       - name: landit-fe 체크아웃
         if: steps.guard.outputs.proceed == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Aragornnnnnn/landit-fe
           ref: ${{ steps.context.outputs.frontend_ref }}
@@ -99,11 +100,12 @@ jobs:
             !*.otf
             !*.woff
             !*.woff2
+            !pnpm-lock.yaml
 
       # src/main/resources/db/는 데이터 시드 SQL이 140MB라 뺀다. 스키마는 엔티티 코드로 충분하다
       - name: landit-be 체크아웃
         if: steps.guard.outputs.proceed == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Aragornnnnnn/landit-be
           ref: ${{ steps.context.outputs.backend_ref }}
@@ -114,16 +116,22 @@ jobs:
           sparse-checkout: |
             /*
             !/src/main/resources/db/
+            !/docs/
 
       - name: landit-ai 체크아웃
         if: steps.guard.outputs.proceed == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Aragornnnnnn/landit-ai
           ref: ${{ steps.context.outputs.ai_ref }}
           path: repos/landit-ai
           fetch-depth: 1
           persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/
+            !/tests/
 
       # 코드 링크가 나중에 main이 바뀌어도 어긋나지 않게 실제로 본 커밋을 박아 둔다
       - name: 코드 커밋 기록
@@ -136,11 +144,12 @@ jobs:
             '.commits = {"landit-fe": $fe, "landit-be": $be, "landit-ai": $ai}' \
             context/meta.json > context/meta.tmp && mv context/meta.tmp context/meta.json
           jq .commits context/meta.json
+          wc -c context/*
 
       # 버전을 고정하고 내려받은 패키지를 캐시한다 — 공급망 변화를 막고 설치 시간을 줄인다
       - name: Claude Code 캐시
         if: steps.guard.outputs.proceed == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.npm
           key: claude-code-${{ env.CLAUDE_CODE_VERSION }}
@@ -151,7 +160,8 @@ jobs:
 
       # 이름은 src/guard.mjs의 ANALYZE_STEP과 같아야 한다(계약 테스트가 확인)
       # 도구는 읽기 전용 셋만 준다 — 셸·네트워크·파일 쓰기가 없어서 Sentry 데이터에 이상한 지시가 섞여 있어도 할 수 있는 일이 없다
-      # env -i로 구독 토큰 말고는 어떤 환경 변수도 Claude에게 넘기지 않는다
+      # env -i로 구독 토큰 말고는 어떤 환경 변수도 Claude에게 넘기지 않고, config/claude-settings.json으로 작업 폴더 밖 시스템 경로 읽기를 막는다
+      # 그래도 결과에 토큰 조각이 섞이면 check-leak이 실패로 끝내 게시하지 않는다
       - name: Claude 분석
         id: analyze
         if: steps.guard.outputs.proceed == 'true'
@@ -159,7 +169,7 @@ jobs:
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'claude-opus-5-5' }}
-          MAX_TURNS: ${{ vars.MAX_TURNS || '50' }}
+          MAX_TURNS: ${{ vars.MAX_TURNS || '30' }}
         run: |
           mkdir -p out
           env -i PATH="$PATH" HOME="$HOME" CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
@@ -168,11 +178,13 @@ jobs:
               --max-turns "$MAX_TURNS" \
               --tools Read Grep Glob \
               --allowedTools Read Grep Glob \
+              --settings config/claude-settings.json \
               --output-format json \
               > out/claude.json || true
           # 실패해도 사용량·사유는 실행 기록에 남기고, 성공 판정은 jq -e가 한다(src/post.mjs도 같은 기준으로 한 번 더 거른다)
           jq '{subtype, is_error, num_turns, duration_ms, usage, total_cost_usd}' out/claude.json
           jq -e '.is_error == false and .subtype == "success"' out/claude.json > /dev/null
+          node scripts/check-leak.mjs
 
       - name: 스레드 게시
         if: steps.analyze.outcome == 'success'
@@ -190,7 +202,7 @@ jobs:
 
       - name: 분석 결과 보관
         if: always() && steps.guard.outputs.proceed == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: triage-${{ inputs.issue_id }}
           path: |
