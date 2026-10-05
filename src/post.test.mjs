@@ -1,0 +1,69 @@
+// 디스코드에 올릴 글을 만드는 로직의 테스트
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import { buildAnalysisPost, buildFailurePost, buildSkipPost } from './post.mjs';
+
+const success = (text) => ({
+  subtype: 'success',
+  is_error: false,
+  result: text,
+  duration_ms: 60_000,
+  usage: { output_tokens: 100_000 },
+});
+
+describe('buildAnalysisPost', () => {
+  it('성공한 분석을 제목과 메시지로 바꾸고 끝에 사용량 줄을 붙인다', () => {
+    // Given 정상 분석 결과
+    const result = success('👀 지켜봐요 · 웹뷰 종료\n\n**👀 지켜봐요** 본문');
+
+    // When 글을 만들면
+    const post = buildAnalysisPost(result, { '👀': '<:tosseyes:1>' });
+
+    // Then 제목은 유니코드, 본문은 앱 이모지, 끝에 사용량
+    assert.equal(post.title, '👀 지켜봐요 · 웹뷰 종료');
+    assert.deepEqual(post.messages, [
+      '**<:tosseyes:1> 지켜봐요** 본문\n\n-# 분석 1분 0초 · 토큰 10.0만',
+    ]);
+  });
+
+  it('에러로 끝난 결과는 null', () => {
+    // Given 로그인 실패처럼 is_error인 결과 (subtype은 success로 온다)
+    const result = { ...success('Not logged in'), is_error: true };
+
+    assert.equal(buildAnalysisPost(result, {}), null);
+  });
+
+  it('도구 사용 상한에 걸려 멈춘 결과는 null', () => {
+    const result = { ...success(''), subtype: 'error_max_turns' };
+
+    assert.equal(buildAnalysisPost(result, {}), null);
+  });
+
+  it('제목만 있고 본문이 없으면 null', () => {
+    assert.equal(
+      buildAnalysisPost(success('🚨 고쳐야 해요 · 제목만'), {}),
+      null,
+    );
+  });
+});
+
+describe('buildSkipPost', () => {
+  it('하루 상한이면 한도 안내를 만든다', () => {
+    const post = buildSkipPost('daily-limit', 10);
+
+    assert.equal(post.title, '⏭️ 분석 건너뜀');
+    assert.match(post.messages[0], /오늘 분석 한도\(10건\)/);
+  });
+
+  it('중복이면 아무것도 올리지 않는다', () => {
+    assert.equal(buildSkipPost('duplicate', 10), null);
+  });
+});
+
+describe('buildFailurePost', () => {
+  it('실행 기록 링크를 담는다', () => {
+    const post = buildFailurePost('https://github.com/o/r/actions/runs/1');
+
+    assert.match(post.messages[0], /actions\/runs\/1/);
+  });
+});
