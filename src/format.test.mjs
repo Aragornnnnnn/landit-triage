@@ -130,4 +130,17 @@ describe('formatUsageLine', () => {
 
     assert.equal(formatUsageLine(result), '-# 분석 42초 · 토큰 0.9만');
   });
+
+  it('API 환산 금액이 있으면 함께 붙인다', () => {
+    const result = {
+      duration_ms: 68_110,
+      total_cost_usd: 0.8480352,
+      usage: { cache_read_input_tokens: 714_876, output_tokens: 6_379 },
+    };
+
+    assert.equal(
+      formatUsageLine(result),
+      '-# 분석 1분 8초 · 토큰 72.1만 (API 환산 $0.85)',
+    );
+  });
 });

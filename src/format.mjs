@@ -94,5 +94,12 @@ export const totalTokens = (usage = {}) =>
   (usage.cache_read_input_tokens ?? 0) +
   (usage.output_tokens ?? 0);
 
-export const formatUsageLine = (result) =>
-  `-# 분석 ${formatDuration(result.duration_ms ?? 0)} · 토큰 ${(totalTokens(result.usage) / 10_000).toFixed(1)}만`;
+// 캐시 읽기가 대부분이라 토큰 수만으로는 무게를 가늠하기 어렵다 — API 정가 환산 금액을 같이 붙인다(구독이라 실제 청구는 없다)
+export const formatUsageLine = (result) => {
+  const tokens = `토큰 ${(totalTokens(result.usage) / 10_000).toFixed(1)}만`;
+  const cost =
+    typeof result.total_cost_usd === 'number'
+      ? ` (API 환산 $${result.total_cost_usd.toFixed(2)})`
+      : '';
+  return `-# 분석 ${formatDuration(result.duration_ms ?? 0)} · ${tokens}${cost}`;
+};
