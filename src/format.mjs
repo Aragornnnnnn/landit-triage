@@ -10,6 +10,9 @@ const stripMarkdown = (line) =>
     .replace(/\*\*|__|`/g, '')
     .trim();
 
+// 첫 줄이 기호뿐이라 제목이 비면 디스코드가 스레드 생성을 거절한다
+const FALLBACK_TITLE = '🔎 Sentry 이슈 분석';
+
 const truncate = (text, max) =>
   text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 
@@ -18,8 +21,9 @@ export const parseAnalysis = (text) => {
   const lines = text.split('\n');
   const titleIndex = lines.findIndex((line) => line.trim() !== '');
   if (titleIndex === -1) return null;
+  const title = stripMarkdown(lines[titleIndex]) || FALLBACK_TITLE;
   return {
-    title: truncate(stripMarkdown(lines[titleIndex]), MAX_THREAD_NAME_LENGTH),
+    title: truncate(title, MAX_THREAD_NAME_LENGTH),
     body: lines
       .slice(titleIndex + 1)
       .join('\n')
@@ -103,3 +107,51 @@ export const formatUsageLine = (result) => {
       : '';
   return `-# 분석 ${formatDuration(result.duration_ms ?? 0)} · ${tokens}${cost}`;
 };
+
+// 분석 글이 링크할 수 있는 곳 — 우리 레포 코드와 Sentry 이슈뿐이다
+const ALLOWED_LINK_PREFIXES = [
+  'https://github.com/Aragornnnnnn/',
+  'https://saynow.sentry.io/',
+  'https://sentry.io/organizations/saynow/',
+];
+
+const isAllowedLink = (url) =>
+  ALLOWED_LINK_PREFIXES.some((prefix) => url.startsWith(prefix));
+
+// 클릭되지 않게 주소를 무디게 만든다 — Sentry 데이터에 섞인 지시로 Claude가 낯선 링크를 써도 누를 수 없다
+const defang = (url) => url.replace('://', '[:]//');
+
+/**
+ * 허용하지 않은 링크를 누를 수 없게 바꾼다.
+ * 가린 링크 [글](주소)는 글 뒤에 무딘 주소를 붙이고, 맨 주소는 무디게만 한다. 코드 블록 안은 건드리지 않는다.
+ */
+export const sanitizeLinks = (text) =>
+  text
+    .split(/(```[\s\S]*?```)/)
+    .map((part, i) =>
+      i % 2 === 1
+        ? part
+        : part
+            .replace(/\[([^\]]*)\]\((\S+?)\)/g, (match, label, url) =>
+              isAllowedLink(url) ? match : `${label} (${defang(url)})`,
+            )
+            .replace(/(?<![(\[])\bhttps?:\/\/[^\s)>]+/g, (url) =>
+              isAllowedLink(url) ? url : defang(url),
+            ),
+    )
+    .join('');
+
+// 비밀값처럼 생긴 문자열 — 분석 글에 섞여 나오면 게시 전에 가린다(Claude가 읽을 수 있는 곳에 토큰이 남는 경우를 대비한 마지막 그물)
+const SECRET_PATTERNS = [
+  /sk-ant-[\w-]{10,}/g,
+  /\b(?:ghp|gho|ghs|ghu|ghr)_[A-Za-z0-9]{20,}/g,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
+  /\bsntry[su]_[A-Za-z0-9_=-]{20,}/g,
+  /\b[MNO][A-Za-z\d]{23,}\.[\w-]{6}\.[\w-]{27,}/g,
+];
+
+export const redactSecrets = (text) =>
+  SECRET_PATTERNS.reduce(
+    (result, pattern) => result.replace(pattern, '[가림]'),
+    text,
+  );

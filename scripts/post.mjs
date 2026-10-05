@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { createDiscordClient } from '../src/discord.mjs';
 import { appendSummary, optionalEnv, requireEnv } from '../src/env.mjs';
+import { invalidInputs } from '../src/inputs.mjs';
 import {
   buildAnalysisPost,
   buildFailurePost,
@@ -19,13 +20,22 @@ const readClaudeResult = () => {
   }
 };
 
+// 이모지 매핑이 깨져도 분석 글은 기본 이모지로 올린다
+const readEmojiMap = () => {
+  try {
+    return JSON.parse(optionalEnv('TRIAGE_EMOJI') ?? '{}');
+  } catch {
+    console.warn('TRIAGE_EMOJI가 JSON이 아니라 기본 이모지를 써요');
+    return {};
+  }
+};
+
 const runUrl = requireEnv('RUN_URL');
 
 const buildPost = (mode) => {
   if (mode === 'analysis') {
-    const emojiMap = JSON.parse(optionalEnv('TRIAGE_EMOJI') ?? '{}');
     return (
-      buildAnalysisPost(readClaudeResult(), emojiMap) ??
+      buildAnalysisPost(readClaudeResult(), readEmojiMap()) ??
       buildFailurePost(runUrl)
     );
   }
@@ -50,6 +60,11 @@ const channelId = optionalEnv('CHANNEL_ID');
 const messageId = optionalEnv('MESSAGE_ID');
 if (!channelId || !messageId) {
   console.log('카드 정보가 없어 디스코드에는 올리지 않았어요(시험 실행)');
+  process.exit(0);
+}
+// 가드가 실패한 뒤 실패 안내로 오는 경우도 있어서 여기서도 한 번 더 본다
+if (invalidInputs({ issueId: '0', channelId, messageId }).length) {
+  console.warn('카드 위치 형식이 맞지 않아 디스코드에 올리지 않았어요');
   process.exit(0);
 }
 

@@ -6,7 +6,9 @@ import {
   MAX_THREAD_NAME_LENGTH,
   formatUsageLine,
   parseAnalysis,
+  redactSecrets,
   replaceVerdictEmoji,
+  sanitizeLinks,
   splitMessage,
 } from './format.mjs';
 
@@ -42,6 +44,12 @@ describe('parseAnalysis', () => {
     const { title } = parseAnalysis('\n\n✅ 문제없어요 · 세션 만료\n본문');
 
     assert.equal(title, '✅ 문제없어요 · 세션 만료');
+  });
+
+  it('첫 줄이 기호뿐이면 기본 제목을 쓴다', () => {
+    const { title } = parseAnalysis('**``**\n본문');
+
+    assert.equal(title, '🔎 Sentry 이슈 분석');
   });
 
   it('내용이 비어 있으면 null을 돌려준다', () => {
@@ -142,5 +150,59 @@ describe('formatUsageLine', () => {
       formatUsageLine(result),
       '-# 분석 1분 8초 · 토큰 72.1만 (API 환산 $0.85)',
     );
+  });
+});
+
+describe('sanitizeLinks', () => {
+  it('우리 레포와 Sentry 링크는 그대로 둔다', () => {
+    const text =
+      '[landit-fe client.ts:67](https://github.com/Aragornnnnnn/landit-fe/blob/abc/a.ts#L67) · https://saynow.sentry.io/issues/1/';
+
+    assert.equal(sanitizeLinks(text), text);
+  });
+
+  it('가린 링크가 다른 곳을 가리키면 글과 무딘 주소로 풀어 쓴다', () => {
+    // Given 코드 링크처럼 보이지만 다른 곳을 가리키는 링크
+    const text = '[landit-fe client.ts:67](https://evil.example/x)';
+
+    // Then 누를 수 없는 주소로 드러난다
+    assert.equal(
+      sanitizeLinks(text),
+      'landit-fe client.ts:67 (https[:]//evil.example/x)',
+    );
+  });
+
+  it('맨 주소도 허용 목록 밖이면 무디게 만든다', () => {
+    assert.equal(
+      sanitizeLinks('여기 보세요 https://evil.example/login'),
+      '여기 보세요 https[:]//evil.example/login',
+    );
+  });
+
+  it('코드 블록 안은 건드리지 않는다', () => {
+    const text = '```\ncurl https://example.com\n```';
+
+    assert.equal(sanitizeLinks(text), text);
+  });
+});
+
+describe('redactSecrets', () => {
+  it('토큰처럼 생긴 문자열을 가린다', () => {
+    // Given 여러 서비스의 토큰 모양이 섞인 글
+    const text = [
+      'sk-ant-oat01-abcdefghijklmnop',
+      'ghs_abcdefghijklmnopqrstuvwxyz0123',
+      'sntrys_eyJpYXQiOjE3MjgwMDAwMDAuMH0abcdef',
+      'MTIzNDU2Nzg5MDEyMzQ1Njc4OQ.GaBcDe.abcdefghijklmnopqrstuvwxyz0123',
+    ].join(' ');
+
+    // Then 전부 가려진다
+    assert.equal(redactSecrets(text), '[가림] [가림] [가림] [가림]');
+  });
+
+  it('평범한 글과 커밋 해시는 그대로 둔다', () => {
+    const text = 'client.ts:67 · fc435ff5e471772023caef1a02a3e26e504532a7';
+
+    assert.equal(redactSecrets(text), text);
   });
 });
