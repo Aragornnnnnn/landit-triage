@@ -41,5 +41,7 @@ jobs:
               --settings config/claude-settings.json \
               --output-format json \
               > out/claude.json || true
+          # 규칙이 실제로 막았다는 증거 — Claude 대답과 별개로 Claude Code가 거절한 도구 호출 목록
+          jq '{is_error, num_turns, permission_denials: [.permission_denials[]? | {tool: .tool_name, input: .tool_input}]}' out/claude.json
           node scripts/check-leak.mjs
           node scripts/check-isolation.mjs
