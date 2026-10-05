@@ -42,7 +42,7 @@
   <!-- landit-alerts → landit-triage -->
   <line x1="460" y1="190" x2="460" y2="262" stroke="#5F5E5A" stroke-width="1.5" marker-end="url(#arrow)"/>
   <rect x="474" y="212" width="250" height="22" rx="11" fill="#F1EFE8"/>
-  <text x="599" y="227" font-size="12" fill="#444441" text-anchor="middle">② repository_dispatch · 이슈 id, 카드 위치</text>
+  <text x="599" y="227" font-size="12" fill="#444441" text-anchor="middle">② workflow_dispatch · 이슈 id, 카드 위치</text>
 
   <!-- landit-triage 컨테이너 -->
   <rect x="40" y="266" width="1120" height="290" rx="16" fill="#F3FAF7" stroke="#1D9E75" stroke-width="1.5"/>

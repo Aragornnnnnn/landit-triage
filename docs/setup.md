@@ -68,11 +68,19 @@ gh variable set TRIAGE_EMOJI -R Aragornnnnnn/landit-triage --body '{"🚨":"<:to
 
 1. GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token
    - Resource owner: **Aragornnnnnn**
+     (목록에 없으면 오가니제이션 설정 → Personal access tokens에서 허용)
    - Repository access: **Only select repositories → landit-triage**
-   - Permissions → Repository → **Contents: Read and write** (repository_dispatch에 필요해요)
-2. landit-alerts의 Vercel 프로젝트에 환경 변수 `TRIAGE_DISPATCH_TOKEN`으로 등록하고 프로덕션에 다시 배포해요.
+   - Permissions → Repository → **Actions: Read and write** 하나만
+2. landit-alerts PR을 머지해요.
+3. landit-alerts Vercel 프로젝트에 `TRIAGE_DISPATCH_TOKEN`(Production)으로 등록해요.
+4. landit-alerts 폴더에서 프로덕션에 다시 배포해요.
+
+```bash
+npx vercel deploy --prod
+```
 
 토큰이 없으면 landit-alerts는 지금처럼 카드만 올려요.
+Contents 권한은 주지 마세요. 코드를 바꿀 수 있는 토큰이 돼요.
 
 ## 6. 확인
 
