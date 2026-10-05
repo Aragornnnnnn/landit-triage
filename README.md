@@ -14,6 +14,7 @@ Sentry에 새 이슈가 생기면 Claude Code가 FE·BE·AI 코드를 함께 읽
 
 ## 목차
 
+- [시스템 아키텍처](#시스템-아키텍처)
 - [동작 방식](#동작-방식)
 - [판정 네 단계](#판정-네-단계)
 - [왜 별도 프라이빗 레포인가](#왜-별도-프라이빗-레포인가)
@@ -24,6 +25,22 @@ Sentry에 새 이슈가 생기면 Claude Code가 FE·BE·AI 코드를 함께 읽
 - [손으로 실행하기](#손으로-실행하기)
 - [개발](#개발)
 - [문제 해결](#문제-해결)
+
+## 시스템 아키텍처
+
+![landit-triage 시스템 아키텍처 — Sentry, Vercel(landit-alerts), Discord, GitHub Actions(landit-triage), Anthropic 사이의 데이터 이동을 번호 순서로 보여 준다](docs/system-architecture.svg)
+
+| #   | 출발 → 도착             | 오가는 데이터                                                                             | 인증                                                        |
+| --- | ----------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| ①   | Sentry → landit-alerts  | 새 이슈 `event_alert` 웹훅 (이벤트 전체)                                                  | HMAC 서명 (`SENTRY_CLIENT_SECRET`)                          |
+| ②   | landit-alerts ↔ Discord | 이슈 카드 embed를 보내고, 올라간 메시지 id·채널 id를 돌려받음 (`?wait=true`)              | 채널 웹훅 URL                                               |
+| ③   | landit-alerts → GitHub  | `repository_dispatch` — `issue_id`, `event_id`, `channel_id`, `message_id`                | `TRIAGE_DISPATCH_TOKEN` (landit-triage 하나, Contents 쓰기) |
+| ④   | landit-triage → Sentry  | 이슈 상세, 알림 이벤트, 최근 이벤트 5건, 태그 분포, 앞뒤 2분 다른 이슈 → `context/*.json` | `SENTRY_AUTH_TOKEN` (읽기)                                  |
+| ⑤   | GitHub → landit-triage  | landit-fe(웹은 릴리즈 커밋), landit-be, landit-ai 코드 → `repos/`                         | 없음 (퍼블릭)                                               |
+| ⑥   | Claude Code ↔ Anthropic | 분석 지침 + `context/` + 읽은 코드 조각, 응답으로 스레드 글                               | `CLAUDE_CODE_OAUTH_TOKEN` (구독)                            |
+| ⑦   | landit-triage → Discord | 카드 메시지에 스레드 생성, 분석 글 게시                                                   | `DISCORD_BOT_TOKEN`                                         |
+
+경로는 두 갈래예요. ①②는 지금까지와 같은 **알림 경로**라 바로 끝나고, ③부터 ⑦까지는 **분석 경로**라 2~4분 걸려요. 분석 경로가 어디서 실패해도 알림 경로는 영향을 받지 않아요.
 
 ## 동작 방식
 
@@ -108,7 +125,7 @@ Claude Code는 관리자 개인 구독으로 돌아요. 구독 사용량 %는 �
 
 상한을 넘으면 Claude를 부르지 않고 스레드에 "오늘 분석 한도를 넘어서 건너뛰었어요"만 남겨요. 분석마다 걸린 시간과 토큰 수가 스레드 끝(`-# 분석 2분 31초 · 토큰 15.2만`)과 실행 요약에 남아요. 처음 며칠은 분석 전후로 claude.ai 사용량 화면을 비교해 "토큰 n만 ≈ 몇 %"를 재 두면, 그다음부터는 토큰 수만 보고 어림할 수 있어요.
 
-참고로 테스트에서는 이슈 하나에 토큰 12만~~18만, 2~~4분이 들었어요(Opus 5.5 기준). 최근 30일 새 이슈는 하루 1건이 안 돼서, 평소에는 상한에 닿지 않아요.
+참고로 테스트에서는 이슈 하나에 토큰 12만에서 18만 개, 시간은 2~4분이 들었어요(Opus 5.5 기준). 최근 30일 새 이슈는 하루 1건이 안 돼서, 평소에는 상한에 닿지 않아요.
 
 ## 보안
 
@@ -140,6 +157,7 @@ docs/
   setup.md          처음 설정 절차
   decisions.md      설계 결정과 이유
   architecture.svg  README 흐름 그림
+  system-architecture.svg  시스템 아키텍처 그림
 ```
 
 외부 패키지 없이 Node.js 22 표준 기능만 써요.
