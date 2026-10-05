@@ -82,6 +82,13 @@ npx vercel deploy --prod
 토큰이 없으면 landit-alerts는 지금처럼 카드만 올려요.
 Contents 권한은 주지 마세요. 코드를 바꿀 수 있는 토큰이 돼요.
 
+Actions 쓰기 권한으로는 이 레포 워크플로우를 실행·취소하고 실행 기록을 지울 수 있어요.
+글을 올릴 채널을 Sentry 채널로 묶으려면 채널 id를 레포 변수로 넣어 주세요.
+
+```bash
+gh variable set TRIAGE_CHANNELS -R Aragornnnnnn/landit-triage --body '<#sentry-web id>,<#sentry-mobile id>'
+```
+
 ## 6. 확인
 
 디스코드에 올리지 않는 시험 실행부터 해요.
@@ -91,3 +98,22 @@ gh workflow run triage.yml -R Aragornnnnnn/landit-triage -f issue_id=<Sentry 이
 ```
 
 Actions 실행 요약에 분석 글이 나오면 성공이에요. 그다음 개인 테스트 서버의 메시지로 채널·메시지 id를 넣어 스레드가 붙는지 봐요.
+
+## 7. 격리 점검
+
+Actions → **self-check** → Run workflow.
+Claude가 작업 폴더 밖(`/proc`, `/etc`, 러너 폴더)을 못 읽는지 실제 러너에서 확인해요.
+Claude Code 버전이나 `config/claude-settings.json`을 바꿀 때마다 한 번 돌려 주세요.
+
+## 토큰 만료
+
+| 토큰                      | 유효 기간            | 만료되면                                                                       |
+| ------------------------- | -------------------- | ------------------------------------------------------------------------------ |
+| `CLAUDE_CODE_OAUTH_TOKEN` | 1년                  | 분석이 "Not logged in"으로 실패 → `claude setup-token` 다시                    |
+| `TRIAGE_DISPATCH_TOKEN`   | 만들 때 정한 기간    | 분석 요청이 안 감(Vercel 로그 `분석 요청: failed`) → 새로 만들어 Vercel에 교체 |
+| `SENTRY_AUTH_TOKEN`       | 만료 없음(연동 토큰) | —                                                                              |
+
+발급일을 여기에 적어 두세요.
+
+- `CLAUDE_CODE_OAUTH_TOKEN`: 2026-10-06
+- `TRIAGE_DISPATCH_TOKEN`:
