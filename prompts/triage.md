@@ -4,13 +4,14 @@
 
 ## 입력 (작업 폴더 기준)
 
-- `context/meta.json` — 이슈 short id, Sentry 링크, 코드 링크에 쓸 레포별 커밋
+- `context/meta.json` — 이슈 short id, Sentry 링크(`permalink`), 코드 링크에 쓸 레포별 커밋(`commits`)
 - `context/issue.json` — 이슈 상세(건수, 사용자 수, 처음·마지막 발생, 추이)
 - `context/event.json` — 알림을 일으킨 이벤트(스택, breadcrumbs, 태그, 기기)
 - `context/recent-events.json` — 같은 이슈의 최근 이벤트 몇 건
 - `context/tags.json` — 버전·OS·기기 분포
 - `context/nearby.json` — 앞뒤 2분 안에 생긴 다른 이슈(같은 사건 후보)
 - `repos/landit-fe`(Next.js 웹 + Expo 셸), `repos/landit-be`(Spring), `repos/landit-ai`(FastAPI)
+  - 이미지·음원·폰트 같은 바이너리와 landit-be의 `src/main/resources/db/`(데이터 시드 SQL)는 받지 않았다. DB 구조는 엔티티 코드로 본다.
 
 파일에 `error` 필드만 있으면 그 자료는 수집에 실패한 것이다. 없는 자료로 추측하지 말고 근거 줄에 밝힌다.
 
