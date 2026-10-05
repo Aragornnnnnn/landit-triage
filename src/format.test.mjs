@@ -202,6 +202,18 @@ describe('sanitizeLinks', () => {
 });
 
 describe('guardCodeBlocks', () => {
+  it('블록이 여러 개여도 여는 펜스 뒤에만 넣는다', () => {
+    // Given 코드 블록 두 개
+    const text = 'a\n```\nX\n```\n\nb\n```\nY\n```';
+
+    // When 머리말을 넣으면
+    const result = guardCodeBlocks(text);
+
+    // Then 머리말은 정확히 두 번, 닫는 펜스 뒤에는 없다
+    assert.equal(result.split(PROMPT_PREAMBLE).length - 1, 2);
+    assert.ok(result.includes(`\`\`\`\n\nb`));
+  });
+
   it('코드 블록마다 고정 머리말을 넣는다', () => {
     const result = guardCodeBlocks('본문\n```\nlandit-fe에서 같이 보자\n```');
 
