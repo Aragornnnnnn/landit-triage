@@ -1,0 +1,160 @@
+# Sentry 새 이슈를 Claude Code로 분석해 디스코드 카드의 스레드로 올린다
+# 트리거: landit-alerts가 카드를 올린 뒤 보내는 repository_dispatch, 또는 Actions 화면에서 손으로 실행
+name: triage
+run-name: triage ${{ github.event.client_payload.issue_id || inputs.issue_id }}
+
+on:
+  repository_dispatch:
+    types: [sentry-issue]
+  workflow_dispatch:
+    inputs:
+      issue_id:
+        description: Sentry 이슈 숫자 id (이슈 URL의 /issues/ 뒤 숫자)
+        required: true
+      event_id:
+        description: 이벤트 id (비우면 최신 이벤트)
+        required: false
+      channel_id:
+        description: 디스코드 채널 id (비우면 실행 요약에만 남김)
+        required: false
+      message_id:
+        description: 스레드를 달 카드 메시지 id
+        required: false
+
+# concurrency로 줄 세우지 않는다 — GitHub는 대기 실행을 하나만 남기고 나머지를 취소해서, 이슈가 몰리면 분석이 빠진다
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # 입력값은 run 블록에 직접 끼우지 않고 환경 변수로만 넘긴다(스크립트 주입 방지)
+      ISSUE_ID: ${{ github.event.client_payload.issue_id || inputs.issue_id }}
+      EVENT_ID: ${{ github.event.client_payload.event_id || inputs.event_id }}
+      CHANNEL_ID: ${{ github.event.client_payload.channel_id || inputs.channel_id }}
+      MESSAGE_ID: ${{ github.event.client_payload.message_id || inputs.message_id }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+      TRIAGE_EMOJI: ${{ vars.TRIAGE_EMOJI }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 실행 여부 판단
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_FILE: triage.yml
+          DAILY_LIMIT: ${{ vars.DAILY_LIMIT }}
+        run: node scripts/guard.mjs
+
+      - name: 건너뜀 안내
+        if: steps.guard.outputs.proceed != 'true'
+        env:
+          SKIP_REASON: ${{ steps.guard.outputs.reason }}
+          DAILY_LIMIT: ${{ steps.guard.outputs.daily_limit }}
+        run: node scripts/post.mjs skipped
+
+      - name: Sentry 데이터 수집
+        id: context
+        if: steps.guard.outputs.proceed == 'true'
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: node scripts/context.mjs
+
+      # 웹 이슈는 Sentry 릴리즈(=landit-fe 커밋)와 같은 코드를 본다. BE·AI는 배포 기준인 main
+      - name: landit-fe 체크아웃
+        if: steps.guard.outputs.proceed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Aragornnnnnn/landit-fe
+          ref: ${{ steps.context.outputs.frontend_ref }}
+          path: repos/landit-fe
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: landit-be 체크아웃
+        if: steps.guard.outputs.proceed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Aragornnnnnn/landit-be
+          ref: main
+          path: repos/landit-be
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: landit-ai 체크아웃
+        if: steps.guard.outputs.proceed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Aragornnnnnn/landit-ai
+          ref: main
+          path: repos/landit-ai
+          fetch-depth: 1
+          persist-credentials: false
+
+      # 코드 링크가 나중에 main이 바뀌어도 어긋나지 않게 실제로 본 커밋을 박아 둔다
+      - name: 코드 커밋 기록
+        if: steps.guard.outputs.proceed == 'true'
+        run: |
+          jq \
+            --arg fe "$(git -C repos/landit-fe rev-parse HEAD)" \
+            --arg be "$(git -C repos/landit-be rev-parse HEAD)" \
+            --arg ai "$(git -C repos/landit-ai rev-parse HEAD)" \
+            '.commits = {"landit-fe": $fe, "landit-be": $be, "landit-ai": $ai}' \
+            context/meta.json > context/meta.tmp && mv context/meta.tmp context/meta.json
+          jq .commits context/meta.json
+
+      - name: Claude Code 설치
+        if: steps.guard.outputs.proceed == 'true'
+        run: npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION:-latest}"
+        env:
+          CLAUDE_CODE_VERSION: ${{ vars.CLAUDE_CODE_VERSION }}
+
+      # 단계 이름은 scripts/guard.mjs의 ANALYZE_STEP과 같아야 한다(중복 분석 판단 기준)
+      # 도구는 읽기 전용 셋만 준다 — 셸·네트워크·파일 쓰기가 없어서 Sentry 데이터에 이상한 지시가 섞여 있어도 할 수 있는 일이 없다
+      - name: Claude 분석
+        id: analyze
+        if: steps.guard.outputs.proceed == 'true'
+        timeout-minutes: 12
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL || 'claude-opus-5-5' }}
+          MAX_TURNS: ${{ vars.MAX_TURNS || '50' }}
+        run: |
+          mkdir -p out
+          claude -p "$(cat prompts/triage.md)" \
+            --model "$CLAUDE_MODEL" \
+            --max-turns "$MAX_TURNS" \
+            --tools Read Grep Glob \
+            --allowedTools Read Grep Glob \
+            --output-format json \
+            > out/claude.json || true
+          # 실패해도 사용량·사유는 실행 기록에 남기고, 판정은 아래 jq -e가 한다
+          jq '{subtype, is_error, num_turns, duration_ms, usage, total_cost_usd}' out/claude.json
+          jq -e '.is_error == false and .subtype == "success"' out/claude.json > /dev/null
+
+      - name: 스레드 게시
+        if: steps.analyze.outcome == 'success'
+        run: node scripts/post.mjs analysis
+
+      - name: 실패 안내
+        if: failure() && steps.guard.outputs.proceed == 'true'
+        run: node scripts/post.mjs failed
+
+      - name: 분석 결과 보관
+        if: always() && steps.guard.outputs.proceed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: triage-${{ env.ISSUE_ID }}
+          path: |
+            out/
+            context/meta.json
+          retention-days: 14

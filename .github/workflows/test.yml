@@ -1,0 +1,24 @@
+# 코드가 바뀔 때 단위 테스트와 문법 검사를 돌린다
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 문법 검사
+        run: for f in scripts/*.mjs src/*.mjs; do node --check "$f"; done
+
+      - name: 단위 테스트
+        run: npm test
