@@ -1,0 +1,8 @@
+node_modules/
+.env
+.env.*
+# 실행 중에 만들어지는 산출물
+context/
+repos/
+out/
+.DS_Store

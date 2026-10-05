@@ -1,0 +1,14 @@
+{
+  "name": "landit-triage",
+  "private": true,
+  "type": "module",
+  "description": "Sentry 새 이슈를 Claude Code로 분석해 디스코드 스레드에 남기는 자동화",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test 'src/**/*.test.mjs'",
+    "context": "node scripts/context.mjs",
+    "post": "node scripts/post.mjs"
+  }
+}
