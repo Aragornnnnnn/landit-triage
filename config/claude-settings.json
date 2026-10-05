@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(//proc/**)",
+      "Read(//sys/**)",
+      "Read(//dev/**)",
+      "Read(//etc/**)",
+      "Read(//root/**)",
+      "Read(//tmp/**)",
+      "Read(//var/**)",
+      "Read(//opt/**)",
+      "Read(//usr/**)",
+      "Read(//run/**)",
+      "Read(//snap/**)",
+      "Read(//mnt/**)",
+      "Read(~/.claude/**)",
+      "Read(~/.claude.json)",
+      "Read(~/.config/**)",
+      "Read(~/.npm/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.gitconfig)",
+      "Read(//home/runner/work/_temp/**)",
+      "Read(//home/runner/work/_actions/**)",
+      "Read(//home/runner/runners/**)",
+      "Read(//home/runner/actions-runner/**)"
+    ]
+  }
+}

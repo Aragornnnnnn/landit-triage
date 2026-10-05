@@ -1,0 +1,45 @@
+# 분석 단계의 격리가 실제 러너에서 먹히는지 점검한다 — Claude Code 버전이나 config/claude-settings.json을 바꾼 뒤 손으로 돌린다
+# Claude에게 파일 내용은 말하지 말고 "읽혔다/막혔다"만 답하게 한 뒤, 기대와 다르면 실패로 끝낸다
+name: self-check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CLAUDE_CODE_VERSION: ${{ vars.CLAUDE_CODE_VERSION || '2.1.289' }}
+
+jobs:
+  isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+
+      - name: Claude Code 설치
+        run: npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+      - name: 읽기 격리 점검
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          mkdir -p out
+          env -i PATH="$PATH" HOME="$HOME" CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
+            claude -p "$(cat prompts/self-check.md)" \
+              --model claude-haiku-4-5-20251001 \
+              --max-turns 12 \
+              --tools Read Grep Glob \
+              --allowedTools Read Grep Glob \
+              --settings config/claude-settings.json \
+              --output-format json \
+              > out/claude.json || true
+          node scripts/check-leak.mjs
+          node scripts/check-isolation.mjs
