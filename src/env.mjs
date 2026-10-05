@@ -7,7 +7,8 @@ export const requireEnv = (name) => {
   return value;
 };
 
-export const optionalEnv = (name) => process.env[name] || null;
+// 비었으면 undefined — 기본 매개변수가 그대로 먹는다
+export const optionalEnv = (name) => process.env[name] || undefined;
 
 // 다음 단계가 steps.<id>.outputs.<key>로 읽는다. 로컬 실행이면 콘솔에만 찍는다
 export const setOutput = (key, value) => {

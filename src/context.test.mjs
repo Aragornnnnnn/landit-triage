@@ -7,6 +7,7 @@ import {
   pickNearbyIssues,
   resolveFrontendRef,
   sanitizeEvent,
+  sanitizeTagSummary,
 } from './context.mjs';
 
 describe('resolveFrontendRef', () => {
@@ -52,6 +53,41 @@ describe('sanitizeEvent', () => {
     assert.equal('_meta' in result, false);
     assert.equal('sdk' in result, false);
     assert.equal(result.eventID, 'e1');
+  });
+
+  it('요청의 헤더·쿠키·본문·쿼리는 빼고 경로와 메서드만 남긴다', () => {
+    // Given 인증 헤더와 쿠키가 든 요청
+    const event = {
+      request: {
+        url: 'https://www.landit.im/scenario',
+        method: 'GET',
+        headers: [['Authorization', 'Bearer x']],
+        cookies: 'sid=1',
+        data: { password: 'p' },
+        query_string: 'token=abc',
+      },
+    };
+
+    // When 다듬으면
+    // Then 경로와 메서드만 남는다
+    assert.deepEqual(sanitizeEvent(event).request, {
+      url: 'https://www.landit.im/scenario',
+      method: 'GET',
+    });
+  });
+
+  it('태그에서 사용자 태그를 뺀다', () => {
+    const event = {
+      tags: [
+        { key: 'user', value: 'email:a@b.c' },
+        { key: 'user.id', value: '42' },
+        { key: 'os', value: 'iOS 18' },
+      ],
+    };
+
+    assert.deepEqual(sanitizeEvent(event).tags, [
+      { key: 'os', value: 'iOS 18' },
+    ]);
   });
 
   it('사용자가 없는 이벤트도 그대로 다룬다', () => {
@@ -139,5 +175,17 @@ describe('pickDeployedRelease', () => {
       pickDeployedRelease([], 'be-v', '2026-10-05T00:00:00Z'),
       'main',
     );
+  });
+});
+
+describe('sanitizeTagSummary', () => {
+  it('이슈 태그 분포에서 사용자 태그를 뺀다', () => {
+    const tags = [{ key: 'user' }, { key: 'release' }];
+
+    assert.deepEqual(sanitizeTagSummary(tags), [{ key: 'release' }]);
+  });
+
+  it('수집 실패 기록은 그대로 둔다', () => {
+    assert.deepEqual(sanitizeTagSummary({ error: 'x' }), { error: 'x' });
   });
 });
