@@ -2,19 +2,32 @@
 import { optionalEnv, requireEnv, setOutput } from '../src/env.mjs';
 import { createGithubClient } from '../src/github.mjs';
 import {
+  countTodayAnalyses,
   decideRun,
-  didAnalyze,
+  hasAnalyzed,
   kstDayStartIso,
-  previousRunsFor,
+  parseDailyLimit,
 } from '../src/guard.mjs';
+import { invalidInputs } from '../src/inputs.mjs';
 
-// 워크플로우의 분석 단계 이름과 같아야 한다
-const ANALYZE_STEP = 'Claude 분석';
 const DEFAULT_DAILY_LIMIT = 10;
+
+// 가드가 첫 단계라 여기서 한 번 막으면 뒤 단계는 검증된 값만 쓴다
+const invalid = invalidInputs({
+  issueId: optionalEnv('ISSUE_ID'),
+  eventId: optionalEnv('EVENT_ID'),
+  channelId: optionalEnv('CHANNEL_ID'),
+  messageId: optionalEnv('MESSAGE_ID'),
+});
+if (invalid.length)
+  throw new Error(`입력 형식이 맞지 않아요: ${invalid.join(', ')}`);
 
 const issueId = requireEnv('ISSUE_ID');
 const currentRunId = Number(requireEnv('GITHUB_RUN_ID'));
-const dailyLimit = Number(optionalEnv('DAILY_LIMIT') ?? DEFAULT_DAILY_LIMIT);
+const dailyLimit = parseDailyLimit(
+  optionalEnv('DAILY_LIMIT'),
+  DEFAULT_DAILY_LIMIT,
+);
 
 const github = createGithubClient(
   requireEnv('GH_TOKEN'),
@@ -26,16 +39,19 @@ const [todayRuns, recentRuns] = await Promise.all([
   github.listRunsSince(kstDayStartIso()),
   github.listRecentRuns(),
 ]);
-
-let alreadyAnalyzed = false;
-for (const run of previousRunsFor(recentRuns, issueId, currentRunId)) {
-  if (didAnalyze(await github.listJobs(run.id), ANALYZE_STEP)) {
-    alreadyAnalyzed = true;
-    break;
-  }
-}
-
-const todayCount = todayRuns.filter((run) => run.id !== currentRunId).length;
+const [alreadyAnalyzed, todayCount] = await Promise.all([
+  hasAnalyzed({
+    runs: recentRuns,
+    issueId,
+    currentRunId,
+    listJobs: github.listJobs,
+  }),
+  countTodayAnalyses({
+    runs: todayRuns,
+    currentRunId,
+    listJobs: github.listJobs,
+  }),
+]);
 const { proceed, reason } = decideRun({
   alreadyAnalyzed,
   todayCount,
@@ -43,7 +59,7 @@ const { proceed, reason } = decideRun({
 });
 
 console.log(
-  `이슈 ${issueId} · 오늘 ${todayCount}/${dailyLimit}건 · ${proceed ? '분석해요' : `건너뛰어요(${reason})`}`,
+  `이슈 ${issueId} · 오늘 분석 ${todayCount}/${dailyLimit}건 · ${proceed ? '분석해요' : `건너뛰어요(${reason})`}`,
 );
 setOutput('proceed', String(proceed));
 setOutput('reason', reason ?? '');
