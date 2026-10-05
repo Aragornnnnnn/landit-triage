@@ -5,6 +5,9 @@ import {
   MAX_MESSAGE_LENGTH,
   MAX_THREAD_NAME_LENGTH,
   formatUsageLine,
+  PROMPT_PREAMBLE,
+  containsSecret,
+  guardCodeBlocks,
   parseAnalysis,
   redactSecrets,
   replaceVerdictEmoji,
@@ -161,28 +164,73 @@ describe('sanitizeLinks', () => {
     assert.equal(sanitizeLinks(text), text);
   });
 
-  it('가린 링크가 다른 곳을 가리키면 글과 무딘 주소로 풀어 쓴다', () => {
-    // Given 코드 링크처럼 보이지만 다른 곳을 가리키는 링크
-    const text = '[landit-fe client.ts:67](https://evil.example/x)';
+  it('가린 링크가 다른 곳을 가리키면 주소를 무디게 만든다', () => {
+    assert.equal(
+      sanitizeLinks('[landit-fe client.ts:67](https://evil.example/x)'),
+      '[landit-fe client.ts:67](https[:]//evil.example/x)',
+    );
+  });
 
-    // Then 누를 수 없는 주소로 드러난다
+  it('괄호 안·중첩 대괄호·코드 블록 안의 주소도 무디게 만든다', () => {
+    // Given 리뷰에서 찾은 우회 모양들
+    const text = [
+      '자세히 (https://evil.example/?x=1)',
+      '[a [b] c](https://evil.example)',
+      '```\ncurl https://evil.example\n```',
+      '<https://evil.example>',
+    ].join('\n');
+
+    // Then 낯선 주소는 하나도 남지 않는다
+    assert.equal(sanitizeLinks(text).includes('https://evil'), false);
+  });
+
+  it('경로를 꺾어 허용 목록을 벗어나는 주소도 거른다', () => {
+    const text = 'https://github.com/Aragornnnnnn/../attacker/repo';
+
     assert.equal(
       sanitizeLinks(text),
-      'landit-fe client.ts:67 (https[:]//evil.example/x)',
+      'https[:]//github.com/Aragornnnnnn/../attacker/repo',
     );
   });
 
-  it('맨 주소도 허용 목록 밖이면 무디게 만든다', () => {
+  it('대문자 스킴도 거른다', () => {
     assert.equal(
-      sanitizeLinks('여기 보세요 https://evil.example/login'),
-      '여기 보세요 https[:]//evil.example/login',
+      sanitizeLinks('HTTPS://evil.example'),
+      'HTTPS[:]//evil.example',
+    );
+  });
+});
+
+describe('guardCodeBlocks', () => {
+  it('코드 블록마다 고정 머리말을 넣는다', () => {
+    const result = guardCodeBlocks('본문\n```\nlandit-fe에서 같이 보자\n```');
+
+    assert.equal(
+      result,
+      `본문\n\`\`\`\n${PROMPT_PREAMBLE}\nlandit-fe에서 같이 보자\n\`\`\``,
+    );
+  });
+});
+
+describe('containsSecret', () => {
+  const secret = 'sk-ant-oat01-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789';
+
+  it('모양을 바꿔 섞어도 토큰 조각이 있으면 true', () => {
+    // Given 접두어를 빼고 공백·대시를 섞은 토큰
+    const leaked = '값: abcd efgh-ijkl mnop qrst uvwx yz01 2345';
+
+    assert.equal(containsSecret(leaked, secret), true);
+  });
+
+  it('토큰과 무관한 글이면 false', () => {
+    assert.equal(
+      containsSecret('세션이 만료됐어요 client.ts:67', secret),
+      false,
     );
   });
 
-  it('코드 블록 안은 건드리지 않는다', () => {
-    const text = '```\ncurl https://example.com\n```';
-
-    assert.equal(sanitizeLinks(text), text);
+  it('비교할 토큰이 없으면 false', () => {
+    assert.equal(containsSecret('아무 글', undefined), false);
   });
 });
 

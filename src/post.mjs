@@ -2,6 +2,7 @@
 
 import {
   formatUsageLine,
+  guardCodeBlocks,
   parseAnalysis,
   redactSecrets,
   replaceVerdictEmoji,
@@ -16,10 +17,16 @@ import { SKIP_REASON } from './guard.mjs';
  */
 export const buildAnalysisPost = (result, emojiMap) => {
   if (!result || result.is_error || result.subtype !== 'success') return null;
-  const parsed = parseAnalysis(redactSecrets(result.result ?? ''));
+  // 거르는 순서: 토큰 가림 → 링크 무디게 → 프롬프트 머리말 → 이모지 → 2,000자 분할(분할이 마지막이라 잘린 조각에도 거른 결과가 남는다)
+  const parsed = parseAnalysis(
+    sanitizeLinks(redactSecrets(result.result ?? '')),
+  );
   if (!parsed || !parsed.body) return null;
-  const body = `${replaceVerdictEmoji(sanitizeLinks(parsed.body), emojiMap)}\n\n${formatUsageLine(result)}`;
-  return { title: parsed.title, messages: splitMessage(body) };
+  const body = replaceVerdictEmoji(guardCodeBlocks(parsed.body), emojiMap);
+  return {
+    title: parsed.title,
+    messages: splitMessage(`${body}\n\n${formatUsageLine(result)}`),
+  };
 };
 
 const SKIP_MESSAGES = {

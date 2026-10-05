@@ -70,6 +70,14 @@ if (invalidInputs({ issueId: '0', channelId, messageId }).length) {
 
 const discord = createDiscordClient(requireEnv('DISCORD_BOT_TOKEN'));
 const threadId = await discord.openThread(channelId, messageId, post.title);
-for (const message of post.messages)
-  await discord.sendMessage(threadId, message);
+try {
+  for (const message of post.messages)
+    await discord.sendMessage(threadId, message);
+} catch (error) {
+  // 글을 올리다 끊기면 반쪽 스레드가 남는다 — 끊겼다는 걸 그 스레드에 알리고 실패로 끝낸다
+  await discord
+    .sendMessage(threadId, buildFailurePost(runUrl).messages[0])
+    .catch(() => {});
+  throw error;
+}
 console.log(`스레드 ${threadId}에 메시지 ${post.messages.length}개를 올렸어요`);
