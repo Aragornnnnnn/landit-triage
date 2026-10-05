@@ -54,6 +54,16 @@ export const createGithubClient = (token, repository, workflowFile) => {
       return data.workflow_runs;
     },
 
+    /** 같은 실행의 이전 시도(다시 실행 전) 단계 목록 */
+    listAttemptJobs: async (runId, attempt) => {
+      const data = await githubGet(
+        token,
+        '이전 시도 단계',
+        `/repos/${repository}/actions/runs/${runId}/attempts/${attempt}/jobs`,
+      );
+      return data.jobs;
+    },
+
     listJobs: async (runId) => {
       const data = await githubGet(
         token,

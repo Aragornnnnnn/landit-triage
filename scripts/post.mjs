@@ -3,6 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { createDiscordClient } from '../src/discord.mjs';
 import { appendSummary, optionalEnv, requireEnv } from '../src/env.mjs';
+import { isAllowedChannel } from '../src/guard.mjs';
 import { invalidInputs } from '../src/inputs.mjs';
 import {
   buildAnalysisPost,
@@ -63,8 +64,13 @@ if (!channelId || !messageId) {
   process.exit(0);
 }
 // 가드가 실패한 뒤 실패 안내로 오는 경우도 있어서 여기서도 한 번 더 본다
-if (invalidInputs({ issueId: '0', channelId, messageId }).length) {
-  console.warn('카드 위치 형식이 맞지 않아 디스코드에 올리지 않았어요');
+if (
+  invalidInputs({ issueId: '0', channelId, messageId }).length ||
+  !isAllowedChannel(channelId, optionalEnv('TRIAGE_CHANNELS'))
+) {
+  console.warn(
+    '카드 위치가 형식이나 허용 채널에 맞지 않아 디스코드에 올리지 않았어요',
+  );
   process.exit(0);
 }
 

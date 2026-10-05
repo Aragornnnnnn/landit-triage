@@ -94,6 +94,21 @@ describe('splitMessage', () => {
     assert.equal(chunks[1], code);
   });
 
+  it('상한보다 긴 코드 블록은 조각마다 펜스를 닫고 다시 연다', () => {
+    // Given 4,000자짜리 코드 블록
+    const block = ['```', 'a'.repeat(4000), '```'].join('\n');
+
+    // When 나누면
+    const chunks = splitMessage(block);
+
+    // Then 모든 조각이 펜스로 열리고 닫히며 상한을 지킨다
+    assert.ok(chunks.length >= 3);
+    for (const chunk of chunks) {
+      assert.ok(chunk.startsWith('```\n') && chunk.endsWith('\n```'));
+      assert.ok(chunk.length <= MAX_MESSAGE_LENGTH);
+    }
+  });
+
   it('한 문단이 상한보다 길면 상한 단위로 강제로 자른다', () => {
     const chunks = splitMessage('가'.repeat(MAX_MESSAGE_LENGTH * 2 + 10));
 
@@ -202,6 +217,17 @@ describe('sanitizeLinks', () => {
 });
 
 describe('guardCodeBlocks', () => {
+  it('한 줄짜리 ```x```는 블록으로 보지 않고, 들여쓴 펜스는 블록으로 본다', () => {
+    const text = '```inline```\n- 목록\n  ```\n  X\n  ```';
+
+    const result = guardCodeBlocks(text);
+
+    assert.equal(
+      result,
+      `\`\`\`inline\`\`\`\n- 목록\n  \`\`\`\n${PROMPT_PREAMBLE}\n  X\n  \`\`\``,
+    );
+  });
+
   it('블록이 여러 개여도 여는 펜스 뒤에만 넣는다', () => {
     // Given 코드 블록 두 개
     const text = 'a\n```\nX\n```\n\nb\n```\nY\n```';

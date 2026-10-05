@@ -32,12 +32,16 @@ export const parseAnalysis = (text) => {
 };
 
 // 빈 줄로 문단을 나누되, 코드 블록 안의 빈 줄은 문단 경계로 보지 않는다
+// 코드 펜스 줄 — 들여쓴 펜스도 펜스다. 한 줄에 ``` 가 두 번이면(```x```) 블록을 열고 닫지 않는다
+const isFenceLine = (line) =>
+  line.trimStart().startsWith('```') && line.split('```').length === 2;
+
 const toBlocks = (text) => {
   const blocks = [];
   let current = [];
   let inFence = false;
   for (const line of text.split('\n')) {
-    if (line.trimStart().startsWith('```')) inFence = !inFence;
+    if (isFenceLine(line)) inFence = !inFence;
     if (line.trim() === '' && !inFence) {
       if (current.length) blocks.push(current.join('\n'));
       current = [];
@@ -49,11 +53,23 @@ const toBlocks = (text) => {
   return blocks;
 };
 
-const hardSplit = (block, max) => {
+const sliceBy = (text, size) => {
   const pieces = [];
-  for (let i = 0; i < block.length; i += max)
-    pieces.push(block.slice(i, i + max));
+  for (let i = 0; i < text.length; i += size)
+    pieces.push(text.slice(i, i + size));
   return pieces;
+};
+
+// 상한보다 긴 문단을 자른다. 코드 블록이면 조각마다 펜스를 닫고 다시 열어, 잘린 뒤에도 블록 모양이 유지되게 한다
+const hardSplit = (block, max) => {
+  const lines = block.split('\n');
+  const isCodeBlock =
+    lines.length >= 2 && isFenceLine(lines[0]) && isFenceLine(lines.at(-1));
+  if (!isCodeBlock) return sliceBy(block, max);
+  const open = lines[0].trim();
+  const body = lines.slice(1, -1).join('\n');
+  const room = max - open.length - '\n\n```'.length;
+  return sliceBy(body, room).map((piece) => `${open}\n${piece}\n\`\`\``);
 };
 
 // 상한 안에서 문단을 최대한 이어 붙인다. 한 문단이 상한보다 길 때만 강제로 자른다
@@ -174,9 +190,13 @@ export const PROMPT_PREAMBLE =
 
 export const guardCodeBlocks = (text) => {
   let open = false;
-  // 여는 펜스 다음 줄에만 넣는다 — 닫는 펜스는 건너뛴다
-  return text.replace(/^```[^\n]*$/gm, (fence) => {
-    open = !open;
-    return open ? `${fence}\n${PROMPT_PREAMBLE}` : fence;
-  });
+  // 여는 펜스 다음 줄에만 넣는다 — 닫는 펜스와 한 줄짜리 ```x```는 건너뛴다
+  return text
+    .split('\n')
+    .map((line) => {
+      if (!isFenceLine(line)) return line;
+      open = !open;
+      return open ? `${line}\n${PROMPT_PREAMBLE}` : line;
+    })
+    .join('\n');
 };

@@ -4,6 +4,7 @@ import { createGithubClient } from '../src/github.mjs';
 import {
   countTodayAnalyses,
   decideRun,
+  didPublish,
   hasAnalyzed,
   isAllowedChannel,
   kstDayStart,
@@ -48,7 +49,13 @@ const me = todayRuns.find((run) => run.id === currentRunId) ?? {
   run_started_at: new Date().toISOString(),
 };
 
-const [alreadyAnalyzed, todayCount] = await Promise.all([
+// "다시 실행"은 같은 run id라 지난 실행 목록으로는 못 잡는다 — 직전 시도가 이미 글을 올렸으면 중복이다
+const attempt = Number(optionalEnv('RUN_ATTEMPT') ?? 1);
+const publishedBefore =
+  attempt > 1 &&
+  didPublish(await github.listAttemptJobs(currentRunId, attempt - 1));
+
+const [analyzedElsewhere, todayCount] = await Promise.all([
   hasAnalyzed({
     runs: recentRuns,
     issueId: inputs.issueId,
@@ -63,6 +70,7 @@ const [alreadyAnalyzed, todayCount] = await Promise.all([
     listJobs: github.listJobs,
   }),
 ]);
+const alreadyAnalyzed = publishedBefore || analyzedElsewhere;
 const { proceed, reason } = decideRun({
   alreadyAnalyzed,
   todayCount,

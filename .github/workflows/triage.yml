@@ -39,6 +39,8 @@ jobs:
       CHANNEL_ID: ${{ inputs.channel_id }}
       MESSAGE_ID: ${{ inputs.message_id }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      # 글을 올려도 되는 채널 — 가드와 게시 단계(건너뜀·분석·실패 안내)가 모두 본다
+      TRIAGE_CHANNELS: ${{ vars.TRIAGE_CHANNELS }}
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -54,8 +56,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW_FILE: triage.yml
+          RUN_ATTEMPT: ${{ github.run_attempt }}
           DAILY_LIMIT: ${{ vars.DAILY_LIMIT }}
-          TRIAGE_CHANNELS: ${{ vars.TRIAGE_CHANNELS }}
         run: node scripts/guard.mjs
 
       - name: 건너뜀 안내
