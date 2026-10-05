@@ -3,12 +3,15 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import {
   DEPLOYED_REPOS,
   FRONTEND_REPO,
+  chooseFrontendRef,
   nearbyWindow,
   pickDeployedRelease,
   pickNearbyIssues,
   resolveFrontendRef,
-  sanitizeEvent,
   sanitizeTagSummary,
+  slimEvent,
+  slimEventSummary,
+  slimIssue,
 } from '../src/context.mjs';
 import { optionalEnv, requireEnv, setOutput } from '../src/env.mjs';
 import { isOnMain, listReleases } from '../src/github.mjs';
@@ -24,8 +27,9 @@ const sentry = createSentryClient(
   optionalEnv('SENTRY_API_BASE'),
 );
 
+// 들여쓰기 없이 쓴다 — Claude가 매 턴 다시 읽는 입력이라 공백도 토큰이다
 const write = (name, data) =>
-  writeFileSync(`${OUT_DIR}/${name}`, `${JSON.stringify(data, null, 2)}\n`);
+  writeFileSync(`${OUT_DIR}/${name}`, `${JSON.stringify(data)}\n`);
 
 // 부가 자료는 없어도 분석은 된다 — 실패를 기록만 하고 계속 간다
 const optional = async (label, load) => {
@@ -40,7 +44,7 @@ const optional = async (label, load) => {
 mkdirSync(OUT_DIR, { recursive: true });
 
 const issue = await sentry.getIssue(issueId);
-const event = sanitizeEvent(
+const event = slimEvent(
   await sentry.getEvent(issueId, optionalEnv('EVENT_ID')),
 );
 if (!event.dateCreated)
@@ -55,14 +59,15 @@ const [recentEvents, tags, nearbyRows] = await Promise.all([
 ]);
 
 // 릴리즈 해시가 main 히스토리에 없으면(포크 커밋, 지워진 커밋) main으로 떨어뜨린다
-const frontendRef = await (async () => {
-  const ref = resolveFrontendRef(event.release?.version ?? event.release);
-  if (ref === 'main') return ref;
-  const onMain = await optional('landit-fe 커밋 확인', () =>
-    isOnMain(githubToken, FRONTEND_REPO, ref),
-  );
-  return onMain === true ? ref : 'main';
-})();
+const releaseRef = resolveFrontendRef(event.release);
+const frontendRef = chooseFrontendRef(
+  releaseRef,
+  releaseRef === 'main'
+    ? false
+    : await optional('landit-fe 커밋 확인', () =>
+        isOnMain(githubToken, FRONTEND_REPO, releaseRef),
+      ),
+);
 
 // 릴리즈를 못 읽으면 main으로 — 코드 버전이 조금 어긋날 뿐 분석은 된다
 const deployedRef = async ({ repository, tagPrefix }) => {
@@ -78,11 +83,13 @@ const [backendRef, aiRef] = await Promise.all([
   deployedRef(DEPLOYED_REPOS['landit-ai']),
 ]);
 
-write('issue.json', issue);
+write('issue.json', slimIssue(issue));
 write('event.json', event);
 write(
   'recent-events.json',
-  Array.isArray(recentEvents) ? recentEvents.map(sanitizeEvent) : recentEvents,
+  Array.isArray(recentEvents)
+    ? recentEvents.map(slimEventSummary)
+    : recentEvents,
 );
 write('tags.json', sanitizeTagSummary(tags));
 write(

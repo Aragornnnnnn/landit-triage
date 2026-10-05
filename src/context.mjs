@@ -1,4 +1,4 @@
-// Sentry 데이터를 분석 입력으로 다듬는 순수 로직 — 개인정보 제거, 코드 기준 커밋, 같은 사건 후보
+// Sentry 데이터를 분석 입력으로 다듬는 순수 로직 — 필요한 칸만 고르기, 코드 기준 커밋, 같은 사건 후보
 
 const SHA_PATTERN = /^[0-9a-f]{40}$/;
 
@@ -28,44 +28,140 @@ export const pickDeployedRelease = (releases, prefix, at) => {
   return deployed[0]?.tag_name ?? 'main';
 };
 
-const DROPPED_FIELDS = [
-  '_meta',
-  'sdk',
-  'sdkUpdates',
-  'userReport',
-  'groupingConfig',
-];
-
-// 요청 정보 중 인증·개인정보가 섞일 수 있는 칸 — 분석엔 경로와 메서드면 충분하다
-const DROPPED_REQUEST_FIELDS = [
-  'headers',
-  'cookies',
-  'data',
-  'env',
-  'query_string',
-];
-
 const isUserTag = (key) => key === 'user' || key.startsWith('user.');
 
-const tagKeyOf = (tag) => (Array.isArray(tag) ? tag[0] : tag?.key);
+// 이벤트 태그는 [{key, value}](REST) 또는 [[key, value]](웹훅) 모양이다
+const normalizeTags = (tags) =>
+  (tags ?? [])
+    .map((tag) => (Array.isArray(tag) ? { key: tag[0], value: tag[1] } : tag))
+    .filter((tag) => tag?.key && !isUserTag(tag.key));
 
-// Claude 입력과 보관 파일에 남는 값이라 사용자는 id만, 요청은 경로만 넘긴다
-export const sanitizeEvent = (event) => {
-  const result = { ...event };
-  for (const field of DROPPED_FIELDS) delete result[field];
-  if (event.user) result.user = event.user.id ? { id: event.user.id } : {};
-  if (event.request) {
-    result.request = { ...event.request };
-    for (const field of DROPPED_REQUEST_FIELDS) delete result.request[field];
-  }
-  if (Array.isArray(event.tags))
-    result.tags = event.tags.filter((tag) => !isUserTag(tagKeyOf(tag) ?? ''));
-  return result;
+// 쿼리·해시에는 토큰·인증 코드가 실리는 일이 많다 — 경로까지만 남긴다
+export const stripQuery = (url) =>
+  typeof url === 'string' ? url.split(/[?#]/)[0] : url;
+
+const MAX_FRAMES = 30;
+const TAIL_FRAMES = 3;
+const MAX_BREADCRUMBS = 40;
+const CONTEXT_KEYS = ['os', 'device', 'app', 'browser', 'runtime', 'trace'];
+
+// 우리 코드 프레임과 맨 위(터진 곳) 몇 개만 — 라이브러리 깊은 프레임은 분석에 거의 쓰이지 않고 토큰만 든다
+const pickFrames = (frames = []) =>
+  frames
+    .filter((frame, i) => frame.inApp || i >= frames.length - TAIL_FRAMES)
+    .slice(-MAX_FRAMES)
+    .map((frame) => ({
+      filename: frame.filename,
+      absPath: stripQuery(frame.absPath),
+      function: frame.function,
+      lineNo: frame.lineNo,
+      colNo: frame.colNo,
+      inApp: frame.inApp,
+      ...(frame.inApp && frame.context && { context: frame.context }),
+    }));
+
+const pickBreadcrumb = (crumb) => {
+  const data = crumb.data ?? {};
+  return {
+    timestamp: crumb.timestamp,
+    type: crumb.type,
+    category: crumb.category,
+    level: crumb.level,
+    message: crumb.message,
+    data: {
+      url: stripQuery(data.url),
+      method: data.method,
+      status_code: data.status_code,
+      from: stripQuery(data.from),
+      to: stripQuery(data.to),
+    },
+  };
 };
+
+const ENTRY_PICKERS = {
+  exception: (data) => ({
+    values: (data.values ?? []).map((value) => ({
+      type: value.type,
+      value: value.value,
+      module: value.module,
+      mechanism: value.mechanism && {
+        type: value.mechanism.type,
+        handled: value.mechanism.handled,
+      },
+      frames: pickFrames(value.stacktrace?.frames),
+    })),
+  }),
+  breadcrumbs: (data) => ({
+    values: (data.values ?? []).slice(-MAX_BREADCRUMBS).map(pickBreadcrumb),
+  }),
+  // 헤더·쿠키·쿼리·본문은 인증 정보가 섞일 수 있어 경로와 메서드만 넘긴다
+  request: (data) => ({ url: stripQuery(data.url), method: data.method }),
+  message: (data) => ({ formatted: data.formatted }),
+};
+
+/**
+ * Claude에게 넘길 이벤트 — 필요한 칸만 골라 담는다(허용 목록 방식).
+ * 받은 데이터를 지우는 대신 고르기 때문에 Sentry가 새 칸을 더해도 개인정보가 새지 않는다.
+ */
+export const slimEvent = (event) => ({
+  eventID: event.eventID,
+  dateCreated: event.dateCreated,
+  title: event.title,
+  message: event.message,
+  culprit: event.culprit,
+  platform: event.platform,
+  release: event.release?.version ?? event.release ?? null,
+  user: event.user?.id ? { id: event.user.id } : null,
+  tags: normalizeTags(event.tags),
+  contexts: Object.fromEntries(
+    CONTEXT_KEYS.filter((key) => event.contexts?.[key]).map((key) => [
+      key,
+      event.contexts[key],
+    ]),
+  ),
+  entries: (event.entries ?? [])
+    .filter((entry) => ENTRY_PICKERS[entry.type])
+    .map((entry) => ({
+      type: entry.type,
+      ...ENTRY_PICKERS[entry.type](entry.data ?? {}),
+    })),
+});
+
+// 최근 이벤트 목록은 추이를 보는 용도라 요약만 — 자세한 내용은 event.json 한 건이면 된다
+export const slimEventSummary = (event) => ({
+  eventID: event.eventID,
+  dateCreated: event.dateCreated,
+  title: event.title,
+  message: event.message,
+  tags: normalizeTags(event.tags),
+});
+
+// 이슈 상세에는 담당자·열람자 이메일(assignedTo, seenBy)이 있다 — 분석에 쓸 칸만 고른다
+export const slimIssue = (issue) => ({
+  id: issue.id,
+  shortId: issue.shortId,
+  title: issue.title,
+  culprit: issue.culprit,
+  level: issue.level,
+  status: issue.status,
+  platform: issue.platform,
+  project: issue.project?.slug,
+  count: issue.count,
+  userCount: issue.userCount,
+  firstSeen: issue.firstSeen,
+  lastSeen: issue.lastSeen,
+  permalink: issue.permalink,
+  metadata: issue.metadata,
+  stats: issue.stats,
+});
 
 // 이슈 태그 분포에서 사용자 태그(이메일이 상위 값으로 올 수 있다)를 뺀다
 export const sanitizeTagSummary = (tags) =>
   Array.isArray(tags) ? tags.filter((tag) => !isUserTag(tag.key ?? '')) : tags;
+
+// 릴리즈 해시가 main 히스토리에 있을 때만 그 커밋을 본다. 확인 실패·main 밖이면 main
+export const chooseFrontendRef = (ref, onMain) =>
+  ref !== 'main' && onMain === true ? ref : 'main';
 
 const NEARBY_MS = 2 * 60 * 1000;
 

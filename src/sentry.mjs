@@ -25,12 +25,9 @@ export const createSentryClient = (
     getEvent: (issueId, eventId) =>
       get('이벤트', `${issuePath(issueId)}/events/${eventId ?? 'latest'}/`),
 
-    /** breadcrumbs까지 든 최근 이벤트 — 한 건만 보고 일반화하지 않게 여러 건을 준다 */
-    listRecentEvents: (issueId, limit = 5) =>
-      get(
-        '최근 이벤트',
-        `${issuePath(issueId)}/events/?full=true&per_page=${limit}`,
-      ),
+    /** 최근 이벤트 요약(full 없이) — 같은 흐름이 반복되는지 보는 용도. 자세한 건 알림 이벤트 한 건으로 충분하다 */
+    listRecentEvents: (issueId, limit = 10) =>
+      get('최근 이벤트', `${issuePath(issueId)}/events/?per_page=${limit}`),
 
     /** 버전·OS·기기 분포 */
     listTags: (issueId) => get('태그', `${issuePath(issueId)}/tags/`),

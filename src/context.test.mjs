@@ -2,12 +2,16 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  chooseFrontendRef,
   nearbyWindow,
   pickDeployedRelease,
   pickNearbyIssues,
   resolveFrontendRef,
-  sanitizeEvent,
   sanitizeTagSummary,
+  slimEvent,
+  slimEventSummary,
+  slimIssue,
+  stripQuery,
 } from './context.mjs';
 
 describe('resolveFrontendRef', () => {
@@ -23,75 +27,179 @@ describe('resolveFrontendRef', () => {
   });
 });
 
-describe('sanitizeEvent', () => {
-  it('사용자 정보는 id만 남기고 이메일·IP·이름을 지운다', () => {
-    // Given 개인정보가 든 이벤트
-    const event = {
-      eventID: 'e1',
-      user: {
-        id: '42',
-        email: 'a@b.c',
-        ip_address: '1.2.3.4',
-        username: 'kim',
-      },
-    };
-
-    // When 다듬으면
-    const result = sanitizeEvent(event);
-
-    // Then id만 남는다
-    assert.deepEqual(result.user, { id: '42' });
-  });
-
-  it('분석에 쓸모없는 큰 필드는 뺀다', () => {
-    const result = sanitizeEvent({
-      eventID: 'e1',
-      _meta: { big: 1 },
-      sdk: { name: 'x' },
-    });
-
-    assert.equal('_meta' in result, false);
-    assert.equal('sdk' in result, false);
-    assert.equal(result.eventID, 'e1');
-  });
-
-  it('요청의 헤더·쿠키·본문·쿼리는 빼고 경로와 메서드만 남긴다', () => {
-    // Given 인증 헤더와 쿠키가 든 요청
-    const event = {
-      request: {
-        url: 'https://www.landit.im/scenario',
+// Sentry "Retrieve an Issue Event" 응답 모양 — 요청·breadcrumbs·예외가 entries 안에 있다
+const sentryEvent = (overrides = {}) => ({
+  eventID: 'c60fd1d7caed41109ac226968f4ec748',
+  dateCreated: '2026-10-05T11:59:42.795Z',
+  title: 'Error: 세션이 만료됐어요.',
+  release: { version: 'fc435ff5e471772023caef1a02a3e26e504532a7' },
+  user: { id: '42', email: 'a@b.c', ip_address: '1.2.3.4', username: 'kim' },
+  tags: [
+    { key: 'os', value: 'iOS 18.7' },
+    { key: 'user', value: 'email:a@b.c' },
+  ],
+  contexts: { os: { name: 'iOS' }, culture: { locale: 'ko-KR' } },
+  _meta: { big: true },
+  sdk: { name: 'sentry.javascript.nextjs' },
+  entries: [
+    {
+      type: 'request',
+      data: {
+        url: 'https://www.landit.im/scenario?code=secret',
         method: 'GET',
         headers: [['Authorization', 'Bearer x']],
-        cookies: 'sid=1',
+        cookies: [['sid', '1']],
+        query: [['code', 'secret']],
         data: { password: 'p' },
-        query_string: 'token=abc',
       },
-    };
+    },
+    {
+      type: 'breadcrumbs',
+      data: {
+        values: [
+          {
+            category: 'fetch',
+            data: {
+              url: '/api/v1/me?token=abc',
+              method: 'GET',
+              status_code: 401,
+              body: 'x',
+            },
+          },
+        ],
+      },
+    },
+    { type: 'debugmeta', data: { images: Array(100).fill({}) } },
+    ...(overrides.entries ?? []),
+  ],
+  ...overrides,
+});
 
+describe('slimEvent', () => {
+  it('사용자 정보는 id만 남긴다', () => {
+    assert.deepEqual(slimEvent(sentryEvent()).user, { id: '42' });
+  });
+
+  it('요청 entry는 쿼리를 뗀 경로와 메서드만 남긴다', () => {
+    // Given 인증 헤더·쿠키·쿼리·본문이 든 요청 entry
     // When 다듬으면
+    const request = slimEvent(sentryEvent()).entries.find(
+      (entry) => entry.type === 'request',
+    );
+
     // Then 경로와 메서드만 남는다
-    assert.deepEqual(sanitizeEvent(event).request, {
+    assert.deepEqual(request, {
+      type: 'request',
       url: 'https://www.landit.im/scenario',
       method: 'GET',
     });
   });
 
-  it('태그에서 사용자 태그를 뺀다', () => {
-    const event = {
-      tags: [
-        { key: 'user', value: 'email:a@b.c' },
-        { key: 'user.id', value: '42' },
-        { key: 'os', value: 'iOS 18' },
-      ],
-    };
+  it('breadcrumb URL의 쿼리와 본문을 뗀다', () => {
+    const crumbs = slimEvent(sentryEvent()).entries.find(
+      (entry) => entry.type === 'breadcrumbs',
+    );
 
-    assert.deepEqual(sanitizeEvent(event).tags, [
-      { key: 'os', value: 'iOS 18' },
-    ]);
+    assert.equal(crumbs.values[0].data.url, '/api/v1/me');
+    assert.equal(crumbs.values[0].data.status_code, 401);
+    assert.equal('body' in crumbs.values[0].data, false);
   });
 
-  it('사용자가 없는 이벤트도 그대로 다룬다', () => {
-    assert.equal(sanitizeEvent({ eventID: 'e1' }).user, undefined);
+  it('사용자 태그와 고르지 않은 칸(_meta, sdk, debugmeta, culture)은 빠진다', () => {
+    const result = slimEvent(sentryEvent());
+
+    assert.deepEqual(result.tags, [{ key: 'os', value: 'iOS 18.7' }]);
+    assert.deepEqual(Object.keys(result.contexts), ['os']);
+    assert.equal('_meta' in result, false);
+    assert.equal(
+      result.entries.some((entry) => entry.type === 'debugmeta'),
+      false,
+    );
+  });
+
+  it('스택은 우리 코드 프레임과 맨 위 세 개만 남긴다', () => {
+    // Given 라이브러리 프레임 10개 사이에 우리 코드 프레임 하나
+    const frames = Array.from({ length: 10 }, (_, i) => ({
+      filename: `lib${i}.js`,
+      inApp: i === 2,
+    }));
+    const event = sentryEvent({
+      entries: [
+        {
+          type: 'exception',
+          data: { values: [{ type: 'Error', stacktrace: { frames } }] },
+        },
+      ],
+    });
+
+    // When 다듬으면
+    const exception = slimEvent(event).entries.find(
+      (entry) => entry.type === 'exception',
+    );
+
+    // Then 2번(우리 코드)과 마지막 세 개만 남는다
+    assert.deepEqual(
+      exception.values[0].frames.map((frame) => frame.filename),
+      ['lib2.js', 'lib7.js', 'lib8.js', 'lib9.js'],
+    );
+  });
+
+  it('릴리즈는 버전 문자열로 편다', () => {
+    assert.equal(
+      slimEvent(sentryEvent()).release,
+      'fc435ff5e471772023caef1a02a3e26e504532a7',
+    );
+  });
+});
+
+describe('slimEventSummary', () => {
+  it('목록 요약은 시각·메시지·사용자 아닌 태그만 남긴다', () => {
+    const summary = slimEventSummary(sentryEvent());
+
+    assert.deepEqual(Object.keys(summary), [
+      'eventID',
+      'dateCreated',
+      'title',
+      'message',
+      'tags',
+    ]);
+    assert.deepEqual(summary.tags, [{ key: 'os', value: 'iOS 18.7' }]);
+  });
+});
+
+describe('slimIssue', () => {
+  it('담당자·열람자처럼 이메일이 든 칸은 넘기지 않는다', () => {
+    const issue = slimIssue({
+      shortId: 'WEB-PROD-1E',
+      count: '1',
+      assignedTo: { email: 'dev@landit.im' },
+      seenBy: [{ email: 'dev@landit.im' }],
+      project: { slug: 'web-prod' },
+    });
+
+    assert.equal(issue.shortId, 'WEB-PROD-1E');
+    assert.equal(issue.project, 'web-prod');
+    assert.equal(JSON.stringify(issue).includes('@'), false);
+  });
+});
+
+describe('stripQuery', () => {
+  it('쿼리와 해시를 뗀다', () => {
+    assert.equal(stripQuery('/a?b=1#c'), '/a');
+    assert.equal(stripQuery(undefined), undefined);
+  });
+});
+
+describe('chooseFrontendRef', () => {
+  const sha = 'fc435ff5e471772023caef1a02a3e26e504532a7';
+
+  it('main 히스토리에 있는 커밋이면 그 커밋', () => {
+    assert.equal(chooseFrontendRef(sha, true), sha);
+  });
+
+  it('main 밖이거나 확인에 실패하면 main', () => {
+    assert.equal(chooseFrontendRef(sha, false), 'main');
+    assert.equal(chooseFrontendRef(sha, { error: 'x' }), 'main');
   });
 });
 
