@@ -2,6 +2,9 @@
 import { requestJson } from './http.mjs';
 
 const API = 'https://api.github.com';
+const PER_PAGE = 100;
+// 이틀치 실행이 1,000건을 넘을 일은 없다 — 무한 루프 방지용 상한
+const MAX_PAGES = 10;
 
 const githubGet = (token, label, path) =>
   requestJson(`GitHub ${label}`, `${API}${path}`, {
@@ -21,14 +24,24 @@ export const createGithubClient = (token, repository, workflowFile) => {
   const runsPath = `/repos/${repository}/actions/workflows/${workflowFile}/runs`;
 
   return {
-    /** createdFrom 이후 실행. 하루 상한이 수십 건이라 한 페이지면 충분하다 */
+    /** createdFrom 이후 실행 전부 — 장애로 하루 100건이 넘어도 앞선 실행이 빠지지 않게 페이지를 끝까지 넘긴다 */
     listRunsSince: async (createdFrom) => {
-      const query = new URLSearchParams({
-        created: `>=${createdFrom}`,
-        per_page: '100',
-      });
-      const data = await githubGet(token, '실행 목록', `${runsPath}?${query}`);
-      return data.workflow_runs;
+      const runs = [];
+      for (let page = 1; page <= MAX_PAGES; page += 1) {
+        const query = new URLSearchParams({
+          created: `>=${createdFrom}`,
+          per_page: String(PER_PAGE),
+          page: String(page),
+        });
+        const data = await githubGet(
+          token,
+          '실행 목록',
+          `${runsPath}?${query}`,
+        );
+        runs.push(...data.workflow_runs);
+        if (data.workflow_runs.length < PER_PAGE) break;
+      }
+      return runs;
     },
 
     /** 중복 확인용 최근 실행 100건 */
