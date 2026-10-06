@@ -79,6 +79,14 @@ describe('프롬프트 분리', () => {
     assert.match(post.messages[1], /landit-fe에서 같이 보자/);
   });
 
+  it('사실 한 줄이 있으면 본문 맨 위에 붙인다', () => {
+    const post = buildAnalysisPost(success(analysis), {}, '👥 1명 · 2건');
+
+    assert.ok(
+      post.messages[0].startsWith('👥 1명 · 2건\n\n**🔕 괜한 알림이에요**'),
+    );
+  });
+
   it('구분 줄이 없으면 첫 코드 블록부터 프롬프트로 본다', () => {
     const { main, prompt } = splitPrompt('본문\n\n```\nX\n```');
 

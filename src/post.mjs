@@ -49,7 +49,7 @@ export const splitPrompt = (body) => {
  * Claude Code `--output-format json` 결과를 스레드 제목·메시지·카드 반응으로 바꾼다.
  * 분석이 실패했거나 형식이 깨졌으면 null — 호출하는 쪽이 실패 안내로 돌린다.
  */
-export const buildAnalysisPost = (result, emojiMap) => {
+export const buildAnalysisPost = (result, emojiMap, factsLine = null) => {
   if (!result || result.is_error || result.subtype !== 'success') return null;
   // 거르는 순서: 토큰 가림 → 링크 무디게 → (본문·프롬프트 나누기) → 프롬프트 머리말 → 이모지 → 2,000자 분할
   const parsed = parseAnalysis(
@@ -58,7 +58,13 @@ export const buildAnalysisPost = (result, emojiMap) => {
   if (!parsed || !parsed.body) return null;
   const { main, prompt } = splitPrompt(parsed.body);
   if (!main) return null;
-  const mainText = `${replaceVerdictEmoji(main, emojiMap)}\n\n${formatUsageLine(result)}`;
+  const mainText = [
+    factsLine,
+    replaceVerdictEmoji(main, emojiMap),
+    formatUsageLine(result),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
   return {
     title: parsed.title,
     reaction: verdictEmojiOf(parsed.title),

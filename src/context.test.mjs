@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
   chooseFrontendRef,
+  formatFactsLine,
   nearbyWindow,
   pickDeployedRelease,
   pickNearbyIssues,
@@ -295,5 +296,34 @@ describe('sanitizeTagSummary', () => {
 
   it('수집 실패 기록은 그대로 둔다', () => {
     assert.deepEqual(sanitizeTagSummary({ error: 'x' }), { error: 'x' });
+  });
+});
+
+describe('formatFactsLine', () => {
+  it('사용자·건수·24시간 건수·처음 시각(한국 시각)을 한 줄로 만든다', () => {
+    // Given Sentry 이슈 수치
+    const issue = {
+      userCount: 37,
+      count: '52',
+      firstSeen: '2026-09-23T03:10:00Z',
+      stats: {
+        '24h': [
+          [1, 2],
+          [2, 0],
+          [3, 1],
+        ],
+      },
+    };
+
+    // Then 고정된 사실 한 줄
+    assert.equal(
+      formatFactsLine(issue),
+      '👥 37명 · 52건 · 24시간 3건 · 9/23 12:10 처음',
+    );
+  });
+
+  it('없는 값은 빼고, 아무것도 없으면 null', () => {
+    assert.equal(formatFactsLine({ userCount: 0, count: '1' }), '👥 0명 · 1건');
+    assert.equal(formatFactsLine({}), null);
   });
 });

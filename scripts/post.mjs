@@ -12,6 +12,16 @@ import {
 } from '../src/post.mjs';
 
 const CLAUDE_RESULT_FILE = 'out/claude.json';
+const META_FILE = 'context/meta.json';
+
+// 수집 단계가 만든 사실 한 줄(👥 …). 없으면 빼고 올린다
+const readFactsLine = () => {
+  try {
+    return JSON.parse(readFileSync(META_FILE, 'utf8')).factsLine ?? null;
+  } catch {
+    return null;
+  }
+};
 
 const readClaudeResult = () => {
   try {
@@ -36,7 +46,7 @@ const runUrl = requireEnv('RUN_URL');
 const buildPost = (mode) => {
   if (mode === 'analysis') {
     return (
-      buildAnalysisPost(readClaudeResult(), readEmojiMap()) ??
+      buildAnalysisPost(readClaudeResult(), readEmojiMap(), readFactsLine()) ??
       buildFailurePost(runUrl)
     );
   }

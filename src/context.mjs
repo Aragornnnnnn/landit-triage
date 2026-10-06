@@ -191,3 +191,43 @@ export const pickNearbyIssues = (rows, currentIssue) => {
   }
   return [...byIssue.values()];
 };
+
+const sumBuckets = (buckets) =>
+  Array.isArray(buckets)
+    ? buckets.reduce((total, [, count]) => total + (Number(count) || 0), 0)
+    : null;
+
+const KST_FORMAT = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  month: 'numeric',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+
+// 10/5 21:11 모양 — 디스코드 한 줄에 짧게 들어가게
+const formatKst = (iso) => {
+  const part = Object.fromEntries(
+    KST_FORMAT.formatToParts(new Date(iso)).map(({ type, value }) => [
+      type,
+      value,
+    ]),
+  );
+  return `${part.month}/${part.day} ${part.hour}:${part.minute}`;
+};
+
+/**
+ * 스레드 맨 위에 고정할 사실 한 줄 — Claude가 아니라 Sentry 수치로 만든다(흔들리지 않게).
+ * 없는 값은 빼고 남은 것만 잇는다.
+ */
+export const formatFactsLine = (issue) => {
+  const last24h = sumBuckets(issue.stats?.['24h']);
+  const parts = [
+    issue.userCount != null && `${issue.userCount}명`,
+    issue.count != null && `${issue.count}건`,
+    last24h != null && `24시간 ${last24h}건`,
+    issue.firstSeen && `${formatKst(issue.firstSeen)} 처음`,
+  ].filter(Boolean);
+  return parts.length ? `👥 ${parts.join(' · ')}` : null;
+};
