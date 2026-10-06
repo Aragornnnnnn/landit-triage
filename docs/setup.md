@@ -116,4 +116,4 @@ Claude Code 버전이나 `config/claude-settings.json`을 바꿀 때마다 한 �
 발급일을 여기에 적어 두세요.
 
 - `CLAUDE_CODE_OAUTH_TOKEN`: 2026-10-06
-- `TRIAGE_DISPATCH_TOKEN`:
+- `TRIAGE_DISPATCH_TOKEN`: 2026-10-06 (1년)
