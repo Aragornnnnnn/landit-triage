@@ -94,3 +94,9 @@ sparse checkout으로 시드 SQL과 FE 바이너리(이미지·음원·폰트)�
 
 Sentry는 웹훅이 1초 안에 응답하길 요구해요.
 landit-alerts는 카드까지만 기다려 답하고, 분석 요청은 Vercel `waitUntil`로 응답 뒤에 보내요.
+
+## 프라이빗 레포는 읽기 토큰으로, 못 받아도 계속
+
+landit-be·landit-ai가 프라이빗으로 바뀌면서 체크아웃이 "레포 없음"으로 실패해 분석 전체가 멈췄어요.
+세 레포 Contents 읽기만 있는 토큰(`CODE_READ_TOKEN`)으로 받고, BE·AI 체크아웃은 실패해도 분석을 이어 가요.
+못 받은 레포는 `meta.json`의 `commits`가 비고, 분석 글에 "못 봐서"라고 밝혀요.

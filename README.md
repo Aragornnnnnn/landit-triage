@@ -117,11 +117,12 @@ Claude Code 버전이나 `config/claude-settings.json`을 바꾸면 한 번 돌�
 
 처음 설정은 [docs/setup.md](docs/setup.md)에 순서대로 있어요.
 
-| Secret                    | 내용                    |
-| ------------------------- | ----------------------- |
-| `CLAUDE_CODE_OAUTH_TOKEN` | `claude setup-token`    |
-| `SENTRY_AUTH_TOKEN`       | Sentry 연동 토큰 (읽기) |
-| `DISCORD_BOT_TOKEN`       | landit-alerts 봇 토큰   |
+| Secret                    | 내용                                         |
+| ------------------------- | -------------------------------------------- |
+| `CLAUDE_CODE_OAUTH_TOKEN` | `claude setup-token`                         |
+| `SENTRY_AUTH_TOKEN`       | Sentry 연동 토큰 (읽기)                      |
+| `DISCORD_BOT_TOKEN`       | landit-alerts 봇 토큰                        |
+| `CODE_READ_TOKEN`         | landit-fe·be·ai 읽기 전용 (be·ai가 프라이빗) |
 
 선택 변수: `CLAUDE_MODEL`(기본 Opus 5.5), `DAILY_LIMIT`, `MAX_TURNS`,
 `CLAUDE_CODE_VERSION`, `TRIAGE_EMOJI`, `TRIAGE_CHANNELS`

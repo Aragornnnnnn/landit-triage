@@ -73,7 +73,8 @@ jobs:
         if: steps.guard.outputs.proceed == 'true'
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
+          # 프라이빗 레포(landit-be·landit-ai) 릴리즈를 읽으려면 읽기 토큰이 필요하다
+          GH_TOKEN: ${{ secrets.CODE_READ_TOKEN || github.token }}
         run: node scripts/context.mjs
 
       # 이슈가 났을 때 돌던 코드를 본다 — 웹은 Sentry 릴리즈(=커밋), BE·AI는 그 시각의 배포 태그, 모바일 셸은 main
@@ -83,6 +84,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Aragornnnnnn/landit-fe
+          token: ${{ secrets.CODE_READ_TOKEN || github.token }}
           ref: ${{ steps.context.outputs.frontend_ref }}
           path: repos/landit-fe
           fetch-depth: 1
@@ -107,9 +109,12 @@ jobs:
       # src/main/resources/db/는 데이터 시드 SQL이 140MB라 뺀다. 스키마는 엔티티 코드로 충분하다
       - name: landit-be 체크아웃
         if: steps.guard.outputs.proceed == 'true'
+        # 못 받아도 분석은 계속한다 — 받은 코드로만 보고, 못 본 레포는 글에 밝힌다
+        continue-on-error: true
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Aragornnnnnn/landit-be
+          token: ${{ secrets.CODE_READ_TOKEN || github.token }}
           ref: ${{ steps.context.outputs.backend_ref }}
           path: repos/landit-be
           fetch-depth: 1
@@ -122,9 +127,12 @@ jobs:
 
       - name: landit-ai 체크아웃
         if: steps.guard.outputs.proceed == 'true'
+        # 못 받아도 분석은 계속한다 — 받은 코드로만 보고, 못 본 레포는 글에 밝힌다
+        continue-on-error: true
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Aragornnnnnn/landit-ai
+          token: ${{ secrets.CODE_READ_TOKEN || github.token }}
           ref: ${{ steps.context.outputs.ai_ref }}
           path: repos/landit-ai
           fetch-depth: 1
@@ -139,10 +147,11 @@ jobs:
       - name: 코드 커밋 기록
         if: steps.guard.outputs.proceed == 'true'
         run: |
+          head_of() { git -C "repos/$1" rev-parse HEAD 2>/dev/null || echo ""; }
           jq \
-            --arg fe "$(git -C repos/landit-fe rev-parse HEAD)" \
-            --arg be "$(git -C repos/landit-be rev-parse HEAD)" \
-            --arg ai "$(git -C repos/landit-ai rev-parse HEAD)" \
+            --arg fe "$(head_of landit-fe)" \
+            --arg be "$(head_of landit-be)" \
+            --arg ai "$(head_of landit-ai)" \
             '.commits = {"landit-fe": $fe, "landit-be": $be, "landit-ai": $ai}' \
             context/meta.json > context/meta.tmp && mv context/meta.tmp context/meta.json
           jq .commits context/meta.json

@@ -43,6 +43,20 @@ Sentry 알림 채널(`#sentry-web`, `#sentry-mobile`)에서 봇에게 아래 권
 - 공개 스레드 만들기
 - 스레드에서 메시지 보내기
 
+## 3-1. 코드 읽기 토큰 (landit-be·landit-ai가 프라이빗이라 필요)
+
+1. GitHub → Settings → Developer settings → Fine-grained tokens → Generate new token
+   - Resource owner: **Aragornnnnnn**
+   - Repository access: **Only select repositories → landit-fe, landit-be, landit-ai**
+   - Permissions → Repository → **Contents: Read-only** 하나만
+2. 시크릿으로 넣어요.
+
+```bash
+gh secret set CODE_READ_TOKEN -R Aragornnnnnn/landit-triage
+```
+
+없으면 퍼블릭 레포(landit-fe)만 받고, 못 받은 레포는 분석 글에 밝혀요.
+
 ## 4. 토스페이스 판정 이모지 (선택)
 
 없으면 본문에도 기본 이모지가 보여요.
@@ -112,6 +126,7 @@ Claude Code 버전이나 `config/claude-settings.json`을 바꿀 때마다 한 �
 | `CLAUDE_CODE_OAUTH_TOKEN` | 1년                  | 분석이 "Not logged in"으로 실패 → `claude setup-token` 다시                    |
 | `TRIAGE_DISPATCH_TOKEN`   | 만들 때 정한 기간    | 분석 요청이 안 감(Vercel 로그 `분석 요청: failed`) → 새로 만들어 Vercel에 교체 |
 | `SENTRY_AUTH_TOKEN`       | 만료 없음(연동 토큰) | —                                                                              |
+| `CODE_READ_TOKEN`         | 만들 때 정한 기간    | BE·AI 코드 없이 분석(글에 "못 봐서" 표시) → 새로 만들어 시크릿 교체            |
 
 발급일을 여기에 적어 두세요.
 
