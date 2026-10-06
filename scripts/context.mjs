@@ -4,7 +4,6 @@ import {
   DEPLOYED_REPOS,
   FRONTEND_REPO,
   chooseFrontendRef,
-  formatFactsLine,
   nearbyWindow,
   pickDeployedRelease,
   pickNearbyIssues,
@@ -104,7 +103,6 @@ write('meta.json', {
   shortId: issue.shortId,
   permalink: issue.permalink,
   project: issue.project?.slug,
-  factsLine: formatFactsLine(issue),
   refs: {
     'landit-fe': frontendRef,
     'landit-be': backendRef,
