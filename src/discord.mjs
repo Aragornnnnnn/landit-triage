@@ -47,13 +47,5 @@ export const createDiscordClient = (botToken) => {
       allowed_mentions: { parse: [] },
     });
 
-  /** 카드 메시지에 반응(이모지)을 단다. 이미 달려 있어도 성공으로 끝난다 */
-  const addReaction = (channelId, messageId, emoji) =>
-    requestJson(
-      '반응 추가',
-      `${API}/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}/@me`,
-      { method: 'PUT', headers: { Authorization: `Bot ${botToken}` } },
-    );
-
-  return { openThread, sendMessage, addReaction };
+  return { openThread, sendMessage };
 };

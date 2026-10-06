@@ -124,18 +124,6 @@ describe('createDiscordClient', () => {
     );
   });
 
-  it('카드에 반응을 달 때 이모지를 주소에 맞게 인코딩해 PUT으로 보낸다', async () => {
-    stubFetch({ status: 200, body: '' });
-
-    await createDiscordClient('token').addReaction('ch', 'msg', '🚨');
-
-    assert.equal(calls[0].method, 'PUT');
-    assert.equal(
-      calls[0].url,
-      `https://discord.com/api/v10/channels/ch/messages/msg/reactions/${encodeURIComponent('🚨')}/@me`,
-    );
-  });
-
   it('메시지는 멘션과 링크 미리보기를 막고 보낸다', async () => {
     stubFetch({ body: {} });
 

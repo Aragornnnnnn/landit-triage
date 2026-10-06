@@ -6,7 +6,6 @@ import {
   buildFailurePost,
   buildSkipPost,
   splitPrompt,
-  verdictEmojiOf,
 } from './post.mjs';
 
 const success = (text) => ({
@@ -66,12 +65,11 @@ describe('프롬프트 분리', () => {
     '```',
   ].join('\n');
 
-  it('본문과 프롬프트를 다른 메시지로 나누고, 판정 이모지를 카드 반응으로 고른다', () => {
+  it('본문과 프롬프트를 다른 메시지로 나눈다', () => {
     // When 분석 결과로 글을 만들면
     const post = buildAnalysisPost(success(analysis), {});
 
-    // Then 첫 메시지는 본문, 두 번째는 프롬프트, 반응은 🔕
-    assert.equal(post.reaction, '🔕');
+    // Then 첫 메시지는 본문, 두 번째는 프롬프트
     assert.equal(post.messages.length, 2);
     assert.ok(post.messages[0].startsWith('**🔕 괜한 알림이에요**'));
     assert.equal(post.messages[0].includes('```'), false);
@@ -102,17 +100,6 @@ describe('프롬프트 분리', () => {
   });
 });
 
-describe('verdictEmojiOf', () => {
-  it('제목 첫 글자의 판정 이모지를 고른다', () => {
-    assert.equal(verdictEmojiOf('🚨 고쳐야 해요 · x'), '🚨');
-    assert.equal(verdictEmojiOf('✅ 문제없어요 · x'), '✅');
-  });
-
-  it('판정 이모지가 아니면 null', () => {
-    assert.equal(verdictEmojiOf('🔎 Sentry 이슈 분석'), null);
-  });
-});
-
 describe('buildSkipPost', () => {
   it('하루 상한이면 한도 안내를 만든다', () => {
     const post = buildSkipPost('daily-limit', 10);
@@ -127,10 +114,6 @@ describe('buildSkipPost', () => {
 });
 
 describe('buildFailurePost', () => {
-  it('카드에 ⚠️ 반응을 단다', () => {
-    assert.equal(buildFailurePost('u').reaction, '⚠️');
-  });
-
   it('실행 기록 링크를 담는다', () => {
     const post = buildFailurePost('https://github.com/o/r/actions/runs/1');
 

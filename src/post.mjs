@@ -11,21 +11,11 @@ import {
 } from './format.mjs';
 import { SKIP_REASON } from './guard.mjs';
 
-/**
- * Claude Code `--output-format json` 결과를 스레드 제목과 메시지 묶음으로 바꾼다.
- * 분석이 실패했거나 형식이 깨졌으면 null — 호출하는 쪽이 실패 안내로 돌린다.
- */
 // 지침이 본문과 프롬프트 사이에 넣는 구분 줄 — 프롬프트는 본문을 읽는 데 방해되지 않게 다음 메시지로 보낸다
 export const PROMPT_DIVIDER = '---프롬프트---';
 
 const PROMPT_HEADER =
   '-# 🧑‍💻 Claude Code에서 이어 보려면 아래 블록을 붙여넣어 주세요';
-
-const VERDICT_EMOJIS = ['🚨', '👀', '🔕', '✅'];
-
-// 스레드 제목 첫 글자가 판정 이모지다 — 카드에 반응으로 달아 채널만 훑어도 판정이 보이게 한다
-export const verdictEmojiOf = (title) =>
-  VERDICT_EMOJIS.find((emoji) => title.startsWith(emoji)) ?? null;
 
 // 구분 줄이 있으면 거기서, 없으면 첫 코드 블록부터를 프롬프트로 본다
 export const splitPrompt = (body) => {
@@ -46,7 +36,7 @@ export const splitPrompt = (body) => {
 };
 
 /**
- * Claude Code `--output-format json` 결과를 스레드 제목·메시지·카드 반응으로 바꾼다.
+ * Claude Code `--output-format json` 결과를 스레드 제목과 메시지로 바꾼다.
  * 분석이 실패했거나 형식이 깨졌으면 null — 호출하는 쪽이 실패 안내로 돌린다.
  */
 export const buildAnalysisPost = (result, emojiMap, { replayUrl } = {}) => {
@@ -68,7 +58,6 @@ export const buildAnalysisPost = (result, emojiMap, { replayUrl } = {}) => {
     .join('\n\n');
   return {
     title: parsed.title,
-    reaction: verdictEmojiOf(parsed.title),
     messages: [
       ...splitMessage(mainText),
       ...(prompt
@@ -92,7 +81,6 @@ export const buildSkipPost = (reason, dailyLimit) => {
 
 export const buildFailurePost = (runUrl) => ({
   title: '⚠️ 분석을 끝내지 못했어요',
-  reaction: '⚠️',
   messages: [
     `분석 중에 문제가 생겨 끝내지 못했어요. 카드 내용으로 먼저 확인해 주세요.\n-# 실행 기록 ${runUrl}`,
   ],
