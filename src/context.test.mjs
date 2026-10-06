@@ -6,6 +6,8 @@ import {
   nearbyWindow,
   pickDeployedRelease,
   pickNearbyIssues,
+  replayIdOf,
+  replayUrlOf,
   resolveFrontendRef,
   sanitizeTagSummary,
   slimEvent,
@@ -295,5 +297,27 @@ describe('sanitizeTagSummary', () => {
 
   it('수집 실패 기록은 그대로 둔다', () => {
     assert.deepEqual(sanitizeTagSummary({ error: 'x' }), { error: 'x' });
+  });
+});
+
+describe('replayIdOf · replayUrlOf', () => {
+  const id = 'a0c781558593470a99b68cba300772ad';
+
+  it('contexts.replay나 replayId 태그에서 리플레이 id를 찾아 링크로 만든다', () => {
+    assert.equal(replayIdOf({ contexts: { replay: { replay_id: id } } }), id);
+    assert.equal(replayIdOf({ tags: [{ key: 'replayId', value: id }] }), id);
+    assert.equal(
+      replayUrlOf('saynow', id),
+      `https://saynow.sentry.io/explore/replays/${id}/`,
+    );
+  });
+
+  it('형식이 이상하거나 없으면 null — 링크를 만들지 않는다', () => {
+    assert.equal(
+      replayIdOf({ tags: [{ key: 'replayId', value: '../x' }] }),
+      null,
+    );
+    assert.equal(replayIdOf({}), null);
+    assert.equal(replayUrlOf('saynow', null), null);
   });
 });

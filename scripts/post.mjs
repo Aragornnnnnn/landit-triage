@@ -12,6 +12,16 @@ import {
 } from '../src/post.mjs';
 
 const CLAUDE_RESULT_FILE = 'out/claude.json';
+const META_FILE = 'context/meta.json';
+
+// 수집 단계가 남긴 리플레이 링크 — 없으면 빼고 올린다
+const readReplayUrl = () => {
+  try {
+    return JSON.parse(readFileSync(META_FILE, 'utf8')).replayUrl ?? null;
+  } catch {
+    return null;
+  }
+};
 
 const readClaudeResult = () => {
   try {
@@ -36,8 +46,9 @@ const runUrl = requireEnv('RUN_URL');
 const buildPost = (mode) => {
   if (mode === 'analysis') {
     return (
-      buildAnalysisPost(readClaudeResult(), readEmojiMap()) ??
-      buildFailurePost(runUrl)
+      buildAnalysisPost(readClaudeResult(), readEmojiMap(), {
+        replayUrl: readReplayUrl(),
+      }) ?? buildFailurePost(runUrl)
     );
   }
   if (mode === 'skipped')

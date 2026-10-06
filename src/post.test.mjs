@@ -79,6 +79,17 @@ describe('프롬프트 분리', () => {
     assert.match(post.messages[1], /landit-fe에서 같이 보자/);
   });
 
+  it('리플레이 링크가 있으면 본문 끝에 화면 녹화 링크를 붙인다', () => {
+    const url = 'https://saynow.sentry.io/explore/replays/abc/';
+
+    const post = buildAnalysisPost(success(analysis), {}, { replayUrl: url });
+
+    assert.match(
+      post.messages[0],
+      /🎥 \[화면 녹화 보기\]\(https:\/\/saynow\.sentry\.io\/explore\/replays\/abc\/\)/,
+    );
+  });
+
   it('구분 줄이 없으면 첫 코드 블록부터 프롬프트로 본다', () => {
     const { main, prompt } = splitPrompt('본문\n\n```\nX\n```');
 

@@ -191,3 +191,17 @@ export const pickNearbyIssues = (rows, currentIssue) => {
   }
   return [...byIssue.values()];
 };
+
+const REPLAY_ID = /^[0-9a-f]{32}$/;
+
+// 이벤트에 붙은 Sentry 리플레이(화면 녹화) — contexts.replay 또는 replayId 태그에 있다
+export const replayIdOf = (event) => {
+  const tagged = normalizeTags(event.tags).find(
+    (tag) => tag.key === 'replayId',
+  )?.value;
+  const id = event.contexts?.replay?.replay_id ?? tagged;
+  return typeof id === 'string' && REPLAY_ID.test(id) ? id : null;
+};
+
+export const replayUrlOf = (org, replayId) =>
+  replayId ? `https://${org}.sentry.io/explore/replays/${replayId}/` : null;

@@ -49,7 +49,7 @@ export const splitPrompt = (body) => {
  * Claude Code `--output-format json` 결과를 스레드 제목·메시지·카드 반응으로 바꾼다.
  * 분석이 실패했거나 형식이 깨졌으면 null — 호출하는 쪽이 실패 안내로 돌린다.
  */
-export const buildAnalysisPost = (result, emojiMap) => {
+export const buildAnalysisPost = (result, emojiMap, { replayUrl } = {}) => {
   if (!result || result.is_error || result.subtype !== 'success') return null;
   // 거르는 순서: 토큰 가림 → 링크 무디게 → (본문·프롬프트 나누기) → 프롬프트 머리말 → 이모지 → 2,000자 분할
   const parsed = parseAnalysis(
@@ -58,9 +58,14 @@ export const buildAnalysisPost = (result, emojiMap) => {
   if (!parsed || !parsed.body) return null;
   const { main, prompt } = splitPrompt(parsed.body);
   if (!main) return null;
-  const mainText = `${replaceVerdictEmoji(main, emojiMap)}
-
-${formatUsageLine(result)}`;
+  // 리플레이 링크는 Claude가 아니라 Sentry 데이터에서 꺼낸 값으로 붙인다
+  const mainText = [
+    replaceVerdictEmoji(main, emojiMap),
+    replayUrl && `🎥 [화면 녹화 보기](${replayUrl})`,
+    formatUsageLine(result),
+  ]
+    .filter(Boolean)
+    .join('\n\n');
   return {
     title: parsed.title,
     reaction: verdictEmojiOf(parsed.title),

@@ -7,6 +7,8 @@ import {
   nearbyWindow,
   pickDeployedRelease,
   pickNearbyIssues,
+  replayIdOf,
+  replayUrlOf,
   resolveFrontendRef,
   sanitizeTagSummary,
   slimEvent,
@@ -44,9 +46,9 @@ const optional = async (label, load) => {
 mkdirSync(OUT_DIR, { recursive: true });
 
 const issue = await sentry.getIssue(issueId);
-const event = slimEvent(
-  await sentry.getEvent(issueId, optionalEnv('EVENT_ID')),
-);
+const org = optionalEnv('SENTRY_ORG') ?? 'saynow';
+const rawEvent = await sentry.getEvent(issueId, optionalEnv('EVENT_ID'));
+const event = slimEvent(rawEvent);
 if (!event.dateCreated)
   console.warn('[context] 이벤트 시각이 없어 BE·AI는 main을 봐요');
 
@@ -102,6 +104,7 @@ write(
 write('meta.json', {
   shortId: issue.shortId,
   permalink: issue.permalink,
+  replayUrl: replayUrlOf(org, replayIdOf(rawEvent)),
   project: issue.project?.slug,
   refs: {
     'landit-fe': frontendRef,
