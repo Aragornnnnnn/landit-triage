@@ -20,7 +20,7 @@ export const createDiscordClient = (botToken) => {
       json,
     });
 
-  /** 카드 메시지에 스레드를 열고 스레드(채널) id를 돌려준다. 이미 있으면 그 스레드를 쓴다 */
+  /** 카드 메시지에 스레드를 열고 스레드(채널) id를 돌려준다. 이미 있으면 그 스레드를 쓰고 제목만 바꾼다 */
   const openThread = async (channelId, messageId, name) => {
     try {
       const thread = await call(
@@ -31,11 +31,17 @@ export const createDiscordClient = (botToken) => {
       return thread.id;
     } catch (error) {
       if (
-        error instanceof HttpError &&
-        error.body.includes(`${THREAD_ALREADY_EXISTS}`)
+        !(error instanceof HttpError) ||
+        !error.body.includes(`${THREAD_ALREADY_EXISTS}`)
       )
-        return messageId;
-      throw error;
+        throw error;
+      // 다시 돌린 분석이면 스레드 제목을 새 판정으로 바꾼다(실패 안내 제목이 남지 않게). 바꾸기 실패는 넘어간다
+      await requestJson('스레드 이름 변경', `${API}/channels/${messageId}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bot ${botToken}` },
+        json: { name },
+      }).catch(() => {});
+      return messageId;
     }
   };
 

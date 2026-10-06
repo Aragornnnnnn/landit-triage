@@ -99,10 +99,13 @@ describe('createDiscordClient', () => {
 
   it('이미 스레드가 있는 메시지면 메시지 id를 스레드 id로 쓴다', async () => {
     // Given 다시 실행해서 스레드가 이미 있다
-    stubFetch({
-      status: 400,
-      body: { code: 160004, message: 'A thread has already been created' },
-    });
+    stubFetch(
+      {
+        status: 400,
+        body: { code: 160004, message: 'A thread has already been created' },
+      },
+      { body: {} },
+    );
 
     // When 스레드를 열면
     const threadId = await createDiscordClient('token').openThread(
@@ -111,8 +114,11 @@ describe('createDiscordClient', () => {
       '제목',
     );
 
-    // Then 실패하지 않고 기존 스레드(=메시지 id)를 쓴다
+    // Then 실패하지 않고 기존 스레드(=메시지 id)를 쓰고, 제목을 새로 바꾼다
     assert.equal(threadId, 'msg');
+    assert.equal(calls[1].method, 'PATCH');
+    assert.equal(calls[1].url, 'https://discord.com/api/v10/channels/msg');
+    assert.deepEqual(JSON.parse(calls[1].body), { name: '제목' });
   });
 
   it('다른 실패는 그대로 던진다', async () => {
