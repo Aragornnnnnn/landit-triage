@@ -86,4 +86,12 @@ try {
     .catch(() => {});
   throw error;
 }
+
+// 판정 이모지를 카드에 단다 — 권한이 없거나 실패해도 분석 글은 이미 올라갔으니 경고만 남긴다
+if (post.reaction)
+  await discord
+    .addReaction(channelId, messageId, post.reaction)
+    .catch((error) =>
+      console.warn(`카드 반응을 달지 못했어요: ${error.message}`),
+    );
 console.log(`스레드 ${threadId}에 메시지 ${post.messages.length}개를 올렸어요`);
