@@ -131,4 +131,4 @@ Claude Code 버전이나 `config/claude-settings.json`을 바꿀 때마다 한 �
 발급일을 여기에 적어 두세요.
 
 - `CLAUDE_CODE_OAUTH_TOKEN`: 2026-10-06
-- `TRIAGE_DISPATCH_TOKEN`: 2026-10-06 (1년)
+- `TRIAGE_DISPATCH_TOKEN`: 2026-11-10 발급, 2027-11-10 만료 (GitHub 토큰 이름 `landit-alerts-triage-c`). 첫 토큰은 만료 기본값 30일로 만들어져 2026-11-05에 끊겼어요. 만들 때 Expiration을 꼭 Custom으로 잡아 주세요.
